@@ -1,10 +1,16 @@
 package com.example.mistyweather.weather.di
 
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStore
 import com.example.mistyweather.BuildConfig
+import com.example.mistyweather.weather.cache.DataStoreWeatherCache
 import com.example.mistyweather.weather.cache.InMemoryWeatherCache
 import com.example.mistyweather.weather.cache.WeatherCache
 import com.example.mistyweather.weather.city.CityRepository
 import com.example.mistyweather.weather.city.CityStorage
+import com.example.mistyweather.weather.city.DataStoreCityStorage
 import com.example.mistyweather.weather.city.DefaultCityRepository
 import com.example.mistyweather.weather.city.InMemoryCityStorage
 import com.example.mistyweather.weather.data.FakeWeatherRepository
@@ -14,6 +20,7 @@ import com.example.mistyweather.weather.data.remote.WeatherApiClient
 import com.example.mistyweather.weather.domain.WeatherRepository
 import com.example.mistyweather.weather.domain.usecase.DefaultGetCurrentWeatherUseCase
 import com.example.mistyweather.weather.domain.usecase.GetCurrentWeatherUseCase
+import com.example.mistyweather.weather.location.DefaultLocationProvider
 import com.example.mistyweather.weather.location.FakeLocationProvider
 import com.example.mistyweather.weather.location.LocationProvider
 
@@ -97,6 +104,8 @@ class DefaultWeatherContainer(
     }
 }
 
+private val Context.mistyDataStore: DataStore<Preferences> by preferencesDataStore(name = "misty_weather_prefs")
+
 /**
  * Global dependency provider module for weather components.
  * Supports runtime replacement for hermetic unit and UI tests.
@@ -110,6 +119,38 @@ object WeatherModule {
      */
     val container: WeatherContainer
         get() = containerInstance
+
+    /**
+     * Initializes the production DI container with Android system services,
+     * persistent DataStore preferences for city storage and weather cache,
+     * and hardware [DefaultLocationProvider].
+     */
+    fun initialize(
+        context: Context,
+        useRemote: Boolean = true,
+    ) {
+        val appContext = context.applicationContext
+        val dataStore = appContext.mistyDataStore
+        val cache = DataStoreWeatherCache(dataStore)
+        val cityStorage = DataStoreCityStorage(dataStore)
+        val cityRepository = DefaultCityRepository(cityStorage)
+        val locationProvider = DefaultLocationProvider(appContext)
+        val weatherRepository = if (useRemote) {
+            RemoteWeatherRepository(api = WeatherApiClient.api, cache = cache)
+        } else {
+            FakeWeatherRepository()
+        }
+        val useCase = DefaultGetCurrentWeatherUseCase(cityRepository, weatherRepository)
+
+        containerInstance = object : WeatherContainer {
+            override val weatherRepository: WeatherRepository = weatherRepository
+            override val weatherCache: WeatherCache = cache
+            override val cityStorage: CityStorage = cityStorage
+            override val cityRepository: CityRepository = cityRepository
+            override val locationProvider: LocationProvider = locationProvider
+            override val getCurrentWeatherUseCase: GetCurrentWeatherUseCase = useCase
+        }
+    }
 
     /**
      * Replaces the active container (e.g. for testing with custom mocks/fakes).

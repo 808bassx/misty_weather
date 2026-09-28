@@ -13,8 +13,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Phase 4.2: Enable remote weather pipeline with Open-Meteo REST API
-        WeatherModule.useRemoteRepository()
+        // Phase 4.3: Initialize real persistent DataStore cache, City storage & Location provider
+        WeatherModule.initialize(applicationContext, useRemote = true)
 
         // Edge-to-edge: weather scene bleeds behind status bar and nav bar —
         // the floating glass nav handles its own safe-area insets.
