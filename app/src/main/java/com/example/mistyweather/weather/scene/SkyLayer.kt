@@ -45,12 +45,15 @@ fun SkyLayer(
 internal fun DrawScope.drawSky(sky: SkyEnvironment, breathAlpha: Float, starOpacity: Float = 0f) {
     val breath = breathAlpha * 0.03f   // Max +3% luminosity pulse
 
-    // Sky gradient
+    // Atmospheric multi-stop sky gradient: Zenith -> Mid-upper -> Mid -> Pre-horizon -> Horizon
+    // Forms continuous vertical optical depth without sharp bands
     drawRect(
         brush = Brush.verticalGradient(
             colorStops = arrayOf(
                 0.00f to sky.zenith.brighten(breath * 0.5f),
-                0.45f to sky.mid.brighten(breath),
+                0.35f to sky.zenith.brighten(breath * 0.7f),
+                0.65f to sky.mid.brighten(breath),
+                0.86f to sky.horizon.copy(alpha = 0.95f),
                 1.00f to sky.horizon,
             ),
         ),

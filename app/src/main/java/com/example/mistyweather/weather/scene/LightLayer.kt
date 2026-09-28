@@ -4,57 +4,118 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import com.example.mistyweather.core.weather.WeatherType
 import com.example.mistyweather.weather.model.LightEnvironment
 
 // ─── Light Layer ─────────────────────────────────────────────────────────────
 //
-// Phase 2 Layer 1: Sun glow, ambient tint, and atmospheric scattering.
+// Phase 2, 3 & 4.4-A1: Atmospheric Light, Horizon Glow, and Diurnal Scattering.
 //
 // Renders:
-//   • Sun corona — large radial gradient centred at sunPosition.
-//   • Sun disc   — small bright circle for the visible sun body.
-//   • Ambient tint overlay — full-screen very-low-alpha rect for warm/cool mood.
+//   • Ambient tint overlay       — Upper-sky atmospheric mood.
+//   • Night airglow              — Guarantees night is never pitch-black #000000.
+//   • Atmospheric Horizon Glow   — Soft vertical optical scattering near horizon.
+//   • Sun Azimuth Scatter        — Golden hour warm dispersal aligned with solar arc.
+//   • Sun Corona & Disc          — Continuous astronomical solar body & heat column.
 //
-// When sun is not visible (Cloudy, Rain, etc.), only the ambient tint draws.
-// Draw cost: 1–3 Canvas ops. Negligible.
+// Draw cost: Pure Canvas operations, zero allocations inside render loop.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Renders ambient environmental light: sun glow + full-screen tint.
+ * Renders ambient environmental light: sun glow, horizon scattering, and night airglow.
  *
- * @param light       Lerped [LightEnvironment] from [rememberWeatherTransition].
+ * @param light       Lerped [LightEnvironment] from atmosphere transition.
  * @param sunPulse    Normalised 0→1 from [WeatherMotion.sunPulse].
- *                    Drives a subtle corona radius oscillation (+8% max).
+ * @param weatherType Underlying weather type for atmospheric diffusion modulation.
  * @param modifier    Should fill the parent.
  */
 @Composable
 fun LightLayer(
     light: LightEnvironment,
     sunPulse: Float,
+    weatherType: WeatherType = WeatherType.Sunny,
     modifier: Modifier = Modifier,
 ) {
     Canvas(modifier = modifier) {
-        drawLight(light, sunPulse)
+        drawLight(light, sunPulse, weatherType)
     }
 }
 
-internal fun DrawScope.drawLight(light: LightEnvironment, sunPulse: Float) {
+internal fun DrawScope.drawLight(
+    light: LightEnvironment,
+    sunPulse: Float,
+    weatherType: WeatherType = WeatherType.Sunny,
+) {
     val w = size.width
     val h = size.height
 
-    // ── 1. Ambient tint — always rendered, very low alpha ───────────────────
-    drawRect(brush = Brush.verticalGradient(
-        colors = listOf(light.ambientTint, Color.Transparent),
-        startY = 0f, endY = h * 0.55f,
-    ))
+    // ── Atmospheric Lighting Model Parameters ────────────────────────────────
+    val solarElevation = AtmosphericLightingModel.calculateElevationFromSunY(
+        sunY      = light.sunPosition.second,
+        isDaytime = light.isDaytime,
+    )
+    val goldenHour = AtmosphericLightingModel.calculateGoldenHourIntensity(solarElevation)
+    val horizonGlow = AtmosphericLightingModel.calculateHorizonGlow(solarElevation, goldenHour, weatherType)
+    val nightAmbient = AtmosphericLightingModel.calculateNightAmbient(solarElevation)
+
+    // ── 1. Ambient tint — upper-sky atmospheric mood ─────────────────────────
+    drawRect(
+        brush = Brush.verticalGradient(
+            colors = listOf(light.ambientTint, Color.Transparent),
+            startY = 0f,
+            endY   = h * 0.55f,
+        ),
+    )
+
+    // ── 2. Night airglow baseline — guarantees night is never #000000 ─────────
+    if (nightAmbient.weight > 0.02f) {
+        drawRect(
+            color = nightAmbient.color,
+        )
+    }
+
+    // ── 3. Atmospheric Horizon Glow ──────────────────────────────────────────
+    // Continuous optical depth: Zenith ~0, Mid-sky faint, Horizon rich & soft.
+    val glowStartY = h * horizonGlow.startYFraction
+    drawRect(
+        brush = Brush.verticalGradient(
+            colors = listOf(Color.Transparent, horizonGlow.color),
+            startY = glowStartY,
+            endY   = h * horizonGlow.endYFraction,
+        ),
+        topLeft = Offset(0f, glowStartY),
+        size    = Size(w, h - glowStartY),
+    )
+
+    // ── 4. Sun Azimuth Horizon Scatter (Golden Hour Bloom) ───────────────────
+    // When the sun is near the horizon, cast a soft warm radial dispersal
+    // anchored at the sun's horizontal azimuth.
+    if (goldenHour > 0.05f && light.sunVisible) {
+        val scatterCenter = Offset(w * light.sunPosition.first, h * 0.92f)
+        val scatterRadius = w * 0.70f
+        drawCircle(
+            brush = Brush.radialGradient(
+                colorStops = arrayOf(
+                    0.00f to horizonGlow.color.copy(alpha = horizonGlow.color.alpha * 0.75f),
+                    0.45f to horizonGlow.color.copy(alpha = horizonGlow.color.alpha * 0.25f),
+                    1.00f to Color.Transparent,
+                ),
+                center = scatterCenter,
+                radius = scatterRadius,
+            ),
+            center = scatterCenter,
+            radius = scatterRadius,
+        )
+    }
 
     if (!light.sunVisible) return
 
-    // ── 2. Sun corona ────────────────────────────────────────────────────────
+    // ── 5. Sun corona ────────────────────────────────────────────────────────
     val sunX = w * light.sunPosition.first
     val sunY = h * light.sunPosition.second
 
@@ -77,7 +138,7 @@ internal fun DrawScope.drawLight(light: LightEnvironment, sunPulse: Float) {
         center = Offset(sunX, sunY),
     )
 
-    // ── 3. Sun disc — small bright circle ────────────────────────────────────
+    // ── 6. Sun disc — small bright circle ────────────────────────────────────
     val discR = w * 0.040f
     drawCircle(
         brush = Brush.radialGradient(
@@ -93,7 +154,7 @@ internal fun DrawScope.drawLight(light: LightEnvironment, sunPulse: Float) {
         center = Offset(sunX, sunY),
     )
 
-    // ── 4. Atmospheric haze column below sun ─────────────────────────────────
+    // ── 7. Atmospheric haze column below sun ─────────────────────────────────
     // A narrow vertical gradient column that suggests heat shimmer.
     drawRect(
         brush = Brush.radialGradient(

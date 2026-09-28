@@ -87,9 +87,10 @@ fun CinematicWeatherScene(
 
         // Layer 1: Sun / moon arc & atmospheric light
         LightLayer(
-            light    = env.light,
-            sunPulse = motion.sunPulse,
-            modifier = Modifier.fillMaxSize(),
+            light       = env.light,
+            sunPulse    = motion.sunPulse,
+            weatherType = env.weatherType,
+            modifier    = Modifier.fillMaxSize(),
         )
 
         // Layer 2: Parallax clouds with time-tinted depth
