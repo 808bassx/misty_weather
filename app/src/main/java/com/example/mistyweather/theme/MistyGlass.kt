@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -63,13 +64,16 @@ enum class GlassLevel(
     Floating(fillAlpha = 0.45f, highlightAlpha = 0.18f, elevationDp = 8f),
 }
 
+/** CompositionLocal providing environmental adaptive tint to nested [GlassSurface] components. */
+val LocalGlassAmbient = compositionLocalOf { Color.Unspecified }
+
 /**
  * Liquid Glass surface — the core visual building block of Misty Weather.
  *
  * @param modifier  Standard Compose modifier.
  * @param level     Opacity tier — see [GlassLevel].
- * @param tint      Optional weather-scene adaptive tint. Use [Color.Unspecified]
- *                  (the default) for neutral white glass.
+ * @param tint      Adaptive tint. Defaults to [LocalGlassAmbient.current] to seamlessly
+ *                  absorb environmental lighting (dawn, sunset, rain, night).
  * @param shape     Surface shape — defaults to [MistyShapes.Glass] (28dp rounded).
  * @param content   Composable content drawn on top of the glass.
  */
@@ -77,7 +81,7 @@ enum class GlassLevel(
 fun GlassSurface(
     modifier: Modifier = Modifier,
     level: GlassLevel = GlassLevel.Regular,
-    tint: Color = Color.Unspecified,
+    tint: Color = LocalGlassAmbient.current,
     shape: Shape = MistyShapes.Glass,
     content: @Composable () -> Unit = {},
 ) {

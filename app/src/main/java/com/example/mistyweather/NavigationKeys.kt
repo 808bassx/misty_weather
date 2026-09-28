@@ -20,3 +20,7 @@ data object LocationSearch : NavKey
 /** Reserved for Phase 2: settings screen. */
 @Serializable
 data object Settings : NavKey
+
+/** Visual calibration showcase screen (Phase 3.5). */
+@Serializable
+data object Showcase : NavKey

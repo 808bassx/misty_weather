@@ -20,8 +20,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,11 +46,14 @@ import com.example.mistyweather.core.weather.WeatherType
 import com.example.mistyweather.weather.scene.CinematicWeatherScene
 import com.example.mistyweather.theme.GlassLevel
 import com.example.mistyweather.theme.GlassSurface
+import com.example.mistyweather.theme.LocalGlassAmbient
 import com.example.mistyweather.theme.MistyColors
 import com.example.mistyweather.theme.MistyDimensions
 import com.example.mistyweather.theme.MistyShapes
 import com.example.mistyweather.theme.MistyType
 import com.example.mistyweather.theme.MistyWeatherTheme
+import com.example.mistyweather.weather.atmosphere.TimeOfDay
+import com.example.mistyweather.weather.atmosphere.computeAmbientAtmosphere
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -68,91 +73,112 @@ import kotlin.math.sin
  * Home Screen entry point.
  *
  * Wires the static preview data to the stateless [HomeScreenContent].
- * In Phase 2, a ViewModel will replace [PreviewWeatherTokyo].
+ * In Phase 3, [timeOfDay] can be specified or defaults to preview time.
  */
 @Composable
-fun HomeScreen(modifier: Modifier = Modifier) {
+fun HomeScreen(
+    modifier: Modifier = Modifier,
+    timeOfDay: TimeOfDay? = null,
+    onOpenShowcase: () -> Unit = {},
+) {
     HomeScreenContent(
-        weather  = PreviewWeatherTokyo,
-        forecast = PreviewForecastSlots,
-        modifier = modifier,
+        weather        = PreviewWeatherTokyo,
+        forecast       = PreviewForecastSlots,
+        timeOfDay      = timeOfDay,
+        onOpenShowcase = onOpenShowcase,
+        modifier       = modifier,
     )
 }
 
 /**
- * Stateless Home Screen content — accepts weather and forecast as parameters
- * so Compose Previews can inject arbitrary data without a ViewModel.
+ * Stateless Home Screen content — accepts weather, forecast, and optional [timeOfDay]
+ * so Compose Previews can inject arbitrary environmental states without a ViewModel.
  */
 @Composable
 internal fun HomeScreenContent(
     weather: WeatherPreview,
     forecast: List<ForecastSlot>,
+    timeOfDay: TimeOfDay? = null,
+    onOpenShowcase: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier.fillMaxSize()) {
+    // Determine active diurnal phase (caller override > weather model > Noon static demo)
+    val activeTime = timeOfDay ?: weather.timeOfDay ?: TimeOfDay.Noon
 
-        // ── Layer 0: Cinematic Weather Background (Phase 2) ──────────────────
-        CinematicWeatherScene(
-            weatherType = weather.weatherType,
-            modifier    = Modifier.fillMaxSize(),
-        )
+    // Compute ambient atmosphere once per state change
+    val atmosphere = remember(weather.weatherType, activeTime) {
+        computeAmbientAtmosphere(weather.weatherType, activeTime)
+    }
 
-        // ── Layer 1: Bottom ambient wash — softens the transition to glass ────
-        AmbientBottomWash()
+    // Adaptive Glass Tint: All nested GlassSurfaces inherit atmosphere.glassAmbient
+    CompositionLocalProvider(LocalGlassAmbient provides atmosphere.glassAmbient) {
+        Box(modifier = modifier.fillMaxSize()) {
 
-        // ── Layer 2 & 3: Scrollable weather content ───────────────────────────
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(
-                    top        = MistyDimensions.Space48,
-                    start      = MistyDimensions.Space16,
-                    end        = MistyDimensions.Space16,
-                    // Extra bottom padding so content clears the floating nav.
-                    bottom     = MistyDimensions.Space48 + MistyDimensions.NavBarHeight +
-                                 MistyDimensions.NavBarBottomInset,
-                ),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            // Location header
-            LocationHeader(
-                city      = weather.city,
-                cityLatin = weather.cityLatin,
+            // ── Layer 0: Cinematic Weather Background (Phase 2 & 3) ──────────
+            CinematicWeatherScene(
+                weatherType = weather.weatherType,
+                timeOfDay   = activeTime,
+                modifier    = Modifier.fillMaxSize(),
             )
 
-            Spacer(Modifier.height(MistyDimensions.Space48))
+            // ── Layer 1: Bottom ambient wash — softens the transition to glass ────
+            AmbientBottomWash()
 
-            // Primary temperature display
-            TemperatureDisplay(
-                temperature = weather.temperature,
-                condition   = weather.condition,
+            // ── Layer 2 & 3: Scrollable weather content ───────────────────────────
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        top        = MistyDimensions.Space48,
+                        start      = MistyDimensions.Space16,
+                        end        = MistyDimensions.Space16,
+                        // Extra bottom padding so content clears the floating nav.
+                        bottom     = MistyDimensions.Space48 + MistyDimensions.NavBarHeight +
+                                     MistyDimensions.NavBarBottomInset,
+                    ),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                // Location header
+                LocationHeader(
+                    city      = weather.city,
+                    cityLatin = weather.cityLatin,
+                )
+
+                Spacer(Modifier.height(MistyDimensions.Space48))
+
+                // Primary temperature display
+                TemperatureDisplay(
+                    temperature = weather.temperature,
+                    condition   = weather.condition,
+                )
+
+                Spacer(Modifier.height(MistyDimensions.Space20))
+
+                // Secondary detail row
+                WeatherDetailsRow(
+                    feelsLike = weather.feelsLike,
+                    humidity  = weather.humidity,
+                )
+
+                Spacer(Modifier.height(MistyDimensions.Space40))
+
+                // Hourly forecast glass card
+                ForecastGlassCard(slots = forecast)
+            }
+
+            // ── Layer 4: Floating Glass Navigation ────────────────────────────────
+            FloatingGlassNavigation(
+                onOpenShowcase = onOpenShowcase,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(
+                        horizontal = MistyDimensions.NavBarHorizontal,
+                        vertical   = MistyDimensions.NavBarBottomInset,
+                    ),
             )
-
-            Spacer(Modifier.height(MistyDimensions.Space20))
-
-            // Secondary detail row
-            WeatherDetailsRow(
-                feelsLike = weather.feelsLike,
-                humidity  = weather.humidity,
-            )
-
-            Spacer(Modifier.height(MistyDimensions.Space40))
-
-            // Hourly forecast glass card
-            ForecastGlassCard(slots = forecast)
         }
-
-        // ── Layer 4: Floating Glass Navigation ────────────────────────────────
-        FloatingGlassNavigation(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(
-                    horizontal = MistyDimensions.NavBarHorizontal,
-                    vertical   = MistyDimensions.NavBarBottomInset,
-                ),
-        )
     }
 }
 
@@ -466,7 +492,10 @@ private val navItems = listOf(
 )
 
 @Composable
-private fun FloatingGlassNavigation(modifier: Modifier = Modifier) {
+private fun FloatingGlassNavigation(
+    onOpenShowcase: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
     var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
 
     GlassSurface(
@@ -487,7 +516,12 @@ private fun FloatingGlassNavigation(modifier: Modifier = Modifier) {
                 NavItemButton(
                     item     = item,
                     selected = selectedIndex == item.index,
-                    onClick  = { selectedIndex = item.index },
+                    onClick  = {
+                        selectedIndex = item.index
+                        if (item.index == 2) {
+                            onOpenShowcase()
+                        }
+                    },
                 )
             }
         }
@@ -576,46 +610,66 @@ private fun NavIconCanvas(
 
 // ─── Previews ─────────────────────────────────────────────────────────────────
 
-@Preview(name = "Home — Cloudy — Light", showBackground = true,
+@Preview(name = "Home — Cloudy Noon", showBackground = true,
     widthDp = 360, heightDp = 780)
 @Composable
 fun HomeScreenPreview() {
     MistyWeatherTheme(darkTheme = false) {
         HomeScreenContent(
-            weather  = PreviewWeatherTokyo,
-            forecast = PreviewForecastSlots,
+            weather   = PreviewWeatherTokyo,
+            forecast  = PreviewForecastSlots,
+            timeOfDay = TimeOfDay.Noon,
         )
     }
 }
 
-@Preview(name = "Home — Sunny — Light", showBackground = true,
+@Preview(name = "Home — Sunny Morning", showBackground = true,
     widthDp = 360, heightDp = 780)
 @Composable
 fun HomeScreenSunnyPreview() {
     MistyWeatherTheme(darkTheme = false) {
         HomeScreenContent(
-            weather  = PreviewWeatherTokyo.copy(
+            weather   = PreviewWeatherTokyo.copy(
                 weatherType = WeatherType.Sunny,
                 condition   = "晴天",
-                temperature = 28,
+                temperature = 24,
             ),
-            forecast = PreviewForecastSlots.map { it.copy(weatherType = WeatherType.Sunny) },
+            forecast  = PreviewForecastSlots.map { it.copy(weatherType = WeatherType.Sunny) },
+            timeOfDay = TimeOfDay.Morning,
         )
     }
 }
 
-@Preview(name = "Home — Rain — Dark", showBackground = true,
+@Preview(name = "Home — Sunny Sunset", showBackground = true,
+    widthDp = 360, heightDp = 780)
+@Composable
+fun HomeScreenSunsetPreview() {
+    MistyWeatherTheme(darkTheme = false) {
+        HomeScreenContent(
+            weather   = PreviewWeatherTokyo.copy(
+                weatherType = WeatherType.Sunny,
+                condition   = "晴空晚霞",
+                temperature = 22,
+            ),
+            forecast  = PreviewForecastSlots.map { it.copy(weatherType = WeatherType.Sunny) },
+            timeOfDay = TimeOfDay.Sunset,
+        )
+    }
+}
+
+@Preview(name = "Home — Rain Night", showBackground = true,
     widthDp = 360, heightDp = 780)
 @Composable
 fun HomeScreenRainDarkPreview() {
     MistyWeatherTheme(darkTheme = true) {
         HomeScreenContent(
-            weather  = PreviewWeatherTokyo.copy(
+            weather   = PreviewWeatherTokyo.copy(
                 weatherType = WeatherType.Rain,
-                condition   = "大雨",
-                temperature = 18,
+                condition   = "夜雨",
+                temperature = 16,
             ),
-            forecast = PreviewForecastSlots.map { it.copy(weatherType = WeatherType.Rain) },
+            forecast  = PreviewForecastSlots.map { it.copy(weatherType = WeatherType.Rain) },
+            timeOfDay = TimeOfDay.Night,
         )
     }
 }

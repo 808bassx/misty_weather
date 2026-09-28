@@ -1,5 +1,7 @@
 package com.example.mistyweather.weather.scene
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -8,85 +10,85 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.mistyweather.core.weather.WeatherType
 import com.example.mistyweather.theme.MistyWeatherTheme
+import com.example.mistyweather.weather.animation.rememberAtmosphereTransition
 import com.example.mistyweather.weather.animation.rememberWeatherMotion
-import com.example.mistyweather.weather.animation.rememberWeatherTransition
+import com.example.mistyweather.weather.atmosphere.TimeOfDay
+import java.time.LocalTime
 
 // ─── Cinematic Weather Scene ─────────────────────────────────────────────────
 //
-// Phase 2: Full-screen animated weather environment.
+// Phase 2 & 3: Full-screen animated weather environment composited with time.
 //
-// Layer stack (bottom → top):
-//   0. SkyLayer      — Vertical gradient sky (zenith → horizon)
-//   1. LightLayer    — Sun corona + ambient tint
-//   2. CloudLayer    — Three-tier parallax clouds
-//   3. ParticleLayer — Rain / snow / fog
+// Layer Stack (bottom → top):
+//   0. SkyLayer      — Vertical gradient sky (zenith → horizon) + star field
+//   1. LightLayer    — Sun/moon corona, astronomical arc, and ambient tint
+//   2. CloudLayer    — Three-tier parallax clouds with time-adjusted shadow & warmth
+//   3. ParticleLayer — Rain / snow / fog with diurnal contrast adaptation
 //
-// All layers are coordinated by:
-//   • rememberWeatherTransition() — spring-animated environment lerp
-//   • rememberWeatherMotion()     — continuous animation clocks
+// Visual Pipeline:
+//   Current Time ──→ TimeOfDay ──→ AmbientLighting ──→ Weather Environment
+//                                                              ↓
+//                                                     CinematicWeatherScene
+//                                                              ↓
+//                                                           Glass UI
 //
-// No BackdropFilter is used in this composable.
-// The Glass surface (GlassSurface) sits above this in the parent Box,
-// applying a single BackdropFilter at the UI layer — never nested.
-//
-// CPU/GPU budget:
-//   • One InfiniteTransition (6 floats total).
-//   • All drawing is Canvas + Brush — no RenderEffect.
-//   • Approx 30-50 draw calls per frame — well within 16ms budget on mid-range.
+// Design & Performance:
+//   • Pure Canvas rendering — NO nested BackdropFilters.
+//   • Single InfiniteTransition for animation clocks.
+//   • Spring transition lerps all layer parameters across both weather & time changes.
+//   • Scene composable ONLY handles rendering — zero business logic computation.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Full-screen cinematic weather background.
+ * Full-screen cinematic weather background driven by [weatherType] and [timeOfDay].
  *
- * Drop-in replacement for the Phase 1 [WeatherScene]:
- * - Same `weatherType` parameter.
- * - Adds smooth scene transitions.
- * - Adds animated layers (clouds, particles, sun glow).
- *
- * The [modifier] should fill the screen. UI content (Glass cards, text)
- * should be placed *above* this in the same [Box].
- *
- * @param weatherType  Current [WeatherType] — drives which environment renders.
+ * @param weatherType  The current weather condition.
+ * @param timeOfDay    The temporal diurnal phase (Dawn, Morning, Noon, Sunset, Evening, Night).
+ *                     Defaults to [TimeOfDay.Noon].
+ * @param timeProgress Progress within the time phase [0, 1]. Defaults to 0.5.
  * @param modifier     Should be [Modifier.fillMaxSize()].
  */
 @Composable
 fun CinematicWeatherScene(
     weatherType: WeatherType,
+    timeOfDay: TimeOfDay = TimeOfDay.Noon,
+    timeProgress: Float = 0.5f,
     modifier: Modifier = Modifier.fillMaxSize(),
 ) {
-    // ── Environment: spring-animated interpolation between WeatherEnvironments ─
-    val env by rememberWeatherTransition(weatherType)
+    // ── Atmosphere: spring-interpolated state across weather & diurnal time ────
+    val env by rememberAtmosphereTransition(weatherType, timeOfDay, timeProgress)
 
-    // ── Motion clocks: single InfiniteTransition shared by all layers ─────────
+    // ── Motion Clocks: single shared infinite transition ──────────────────────
     val motion = rememberWeatherMotion()
 
-    // ── Layer stack ────────────────────────────────────────────────────────────
+    // ── Layer Stack ───────────────────────────────────────────────────────────
     Box(modifier = modifier) {
 
-        // Layer 0: Sky gradient
+        // Layer 0: Sky gradient + stars
         SkyLayer(
-            sky          = env.sky,
-            breathAlpha  = motion.ambientBreath,
-            modifier     = Modifier.fillMaxSize(),
+            sky         = env.sky,
+            breathAlpha = motion.ambientBreath,
+            starOpacity = env.starOpacity,
+            modifier    = Modifier.fillMaxSize(),
         )
 
-        // Layer 1: Sun glow + ambient tint
+        // Layer 1: Sun / moon arc & atmospheric light
         LightLayer(
             light    = env.light,
             sunPulse = motion.sunPulse,
             modifier = Modifier.fillMaxSize(),
         )
 
-        // Layer 2: Parallax clouds
+        // Layer 2: Parallax clouds with time-tinted depth
         CloudLayer(
-            clouds      = env.clouds,
-            cloudDrift  = motion.cloudDrift,
-            cloudShape  = motion.cloudShape,
-            modifier    = Modifier.fillMaxSize(),
+            clouds     = env.clouds,
+            cloudDrift = motion.cloudDrift,
+            cloudShape = motion.cloudShape,
+            modifier   = Modifier.fillMaxSize(),
         )
 
-        // Layer 3: Particles (rain / snow / fog)
+        // Layer 3: Rain, snow, or fog particles
         ParticleLayer(
             particles = env.particles,
             fallClock = motion.particleFall,
@@ -96,46 +98,78 @@ fun CinematicWeatherScene(
     }
 }
 
-// ─── Previews ─────────────────────────────────────────────────────────────────
-
-@Preview(name = "Cinematic — Sunny", showBackground = true, widthDp = 360, heightDp = 780)
+/**
+ * Convenience overload driving [CinematicWeatherScene] from a [LocalTime].
+ */
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
-private fun PreviewSunny() {
-    MistyWeatherTheme { CinematicWeatherScene(WeatherType.Sunny) }
+fun CinematicWeatherScene(
+    weatherType: WeatherType,
+    time: LocalTime,
+    modifier: Modifier = Modifier.fillMaxSize(),
+) {
+    val phase = TimeOfDay.from(time)
+    val progress = TimeOfDay.progressWithin(time)
+    CinematicWeatherScene(
+        weatherType  = weatherType,
+        timeOfDay    = phase,
+        timeProgress = progress,
+        modifier     = modifier,
+    )
 }
 
-@Preview(name = "Cinematic — PartlyCloudy", showBackground = true, widthDp = 360, heightDp = 780)
+// ─── Phase 3 Previews ─────────────────────────────────────────────────────────
+
+@Preview(name = "Sunny Morning", showBackground = true, widthDp = 360, heightDp = 780)
 @Composable
-private fun PreviewPartlyCloudy() {
-    MistyWeatherTheme { CinematicWeatherScene(WeatherType.PartlyCloudy) }
+private fun PreviewSunnyMorning() {
+    MistyWeatherTheme { CinematicWeatherScene(WeatherType.Sunny, TimeOfDay.Morning) }
 }
 
-@Preview(name = "Cinematic — Cloudy", showBackground = true, widthDp = 360, heightDp = 780)
+@Preview(name = "Sunny Noon", showBackground = true, widthDp = 360, heightDp = 780)
 @Composable
-private fun PreviewCloudy() {
-    MistyWeatherTheme { CinematicWeatherScene(WeatherType.Cloudy) }
+private fun PreviewSunnyNoon() {
+    MistyWeatherTheme { CinematicWeatherScene(WeatherType.Sunny, TimeOfDay.Noon) }
 }
 
-@Preview(name = "Cinematic — Rain", showBackground = true, widthDp = 360, heightDp = 780)
+@Preview(name = "Sunny Sunset", showBackground = true, widthDp = 360, heightDp = 780)
 @Composable
-private fun PreviewRain() {
-    MistyWeatherTheme { CinematicWeatherScene(WeatherType.Rain) }
+private fun PreviewSunnySunset() {
+    MistyWeatherTheme { CinematicWeatherScene(WeatherType.Sunny, TimeOfDay.Sunset) }
 }
 
-@Preview(name = "Cinematic — Storm", showBackground = true, widthDp = 360, heightDp = 780)
+@Preview(name = "Sunny Night", showBackground = true, widthDp = 360, heightDp = 780)
 @Composable
-private fun PreviewStorm() {
-    MistyWeatherTheme { CinematicWeatherScene(WeatherType.Storm) }
+private fun PreviewSunnyNight() {
+    MistyWeatherTheme { CinematicWeatherScene(WeatherType.Sunny, TimeOfDay.Night) }
 }
 
-@Preview(name = "Cinematic — Snow", showBackground = true, widthDp = 360, heightDp = 780)
+@Preview(name = "Rain Morning", showBackground = true, widthDp = 360, heightDp = 780)
 @Composable
-private fun PreviewSnow() {
-    MistyWeatherTheme { CinematicWeatherScene(WeatherType.Snow) }
+private fun PreviewRainMorning() {
+    MistyWeatherTheme { CinematicWeatherScene(WeatherType.Rain, TimeOfDay.Morning) }
 }
 
-@Preview(name = "Cinematic — Fog", showBackground = true, widthDp = 360, heightDp = 780)
+@Preview(name = "Rain Evening", showBackground = true, widthDp = 360, heightDp = 780)
 @Composable
-private fun PreviewFog() {
-    MistyWeatherTheme { CinematicWeatherScene(WeatherType.Fog) }
+private fun PreviewRainEvening() {
+    MistyWeatherTheme { CinematicWeatherScene(WeatherType.Rain, TimeOfDay.Evening) }
+}
+
+@Preview(name = "Rain Night", showBackground = true, widthDp = 360, heightDp = 780)
+@Composable
+private fun PreviewRainNight() {
+    MistyWeatherTheme { CinematicWeatherScene(WeatherType.Rain, TimeOfDay.Night) }
+}
+
+@Preview(name = "Snow Night", showBackground = true, widthDp = 360, heightDp = 780)
+@Composable
+private fun PreviewSnowNight() {
+    MistyWeatherTheme { CinematicWeatherScene(WeatherType.Snow, TimeOfDay.Night) }
+}
+
+@Preview(name = "Storm Night", showBackground = true, widthDp = 360, heightDp = 780)
+@Composable
+private fun PreviewStormNight() {
+    MistyWeatherTheme { CinematicWeatherScene(WeatherType.Storm, TimeOfDay.Night) }
 }

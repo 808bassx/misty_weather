@@ -43,6 +43,7 @@ data class WeatherPreview(
     val feelsLike: Int,
     val humidity: Int,
     val weatherType: WeatherType,
+    val timeOfDay: com.example.mistyweather.weather.atmosphere.TimeOfDay? = null,
 )
 
 /**
