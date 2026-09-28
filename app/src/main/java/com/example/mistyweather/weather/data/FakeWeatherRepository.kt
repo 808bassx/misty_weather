@@ -35,7 +35,22 @@ class FakeWeatherRepository(
         longitude: Double,
         cityName: String,
         cityNameLatin: String,
-    ): Flow<WeatherState> = _weatherFlow.asStateFlow()
+    ): Flow<WeatherState> {
+        return if (cityName.isNotBlank()) {
+            kotlinx.coroutines.flow.flow {
+                _weatherFlow.collect { state ->
+                    emit(
+                        state.copy(
+                            cityName = cityName,
+                            cityNameLatin = if (cityNameLatin.isNotBlank()) cityNameLatin else state.cityNameLatin,
+                        )
+                    )
+                }
+            }
+        } else {
+            _weatherFlow.asStateFlow()
+        }
+    }
 
     override suspend fun refreshWeatherByCoordinates(
         latitude: Double,
@@ -43,7 +58,12 @@ class FakeWeatherRepository(
         cityName: String,
         cityNameLatin: String,
     ) {
-        // No-op for fake repository
+        if (cityName.isNotBlank()) {
+            _weatherFlow.value = _weatherFlow.value.copy(
+                cityName = cityName,
+                cityNameLatin = if (cityNameLatin.isNotBlank()) cityNameLatin else _weatherFlow.value.cityNameLatin,
+            )
+        }
     }
 
     /** Helper to simulate weather transitions in demo & tests. */

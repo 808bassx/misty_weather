@@ -4,6 +4,8 @@ import com.example.mistyweather.core.weather.WeatherType
 import com.example.mistyweather.weather.atmosphere.TimeOfDay
 import com.example.mistyweather.weather.cache.CachedWeather
 import com.example.mistyweather.weather.cache.InMemoryWeatherCache
+import com.example.mistyweather.weather.city.DefaultCityRepository
+import com.example.mistyweather.weather.city.InMemoryCityStorage
 import com.example.mistyweather.weather.data.FakeWeatherRepository
 import com.example.mistyweather.weather.di.WeatherContainer
 import com.example.mistyweather.weather.di.WeatherModule
@@ -200,8 +202,14 @@ class WeatherViewModelTest {
             initialWeather = CachedWeather("kyoto", customState, customRender, 1727530000000L)
         )
         val fakeRepo = FakeWeatherRepository(initialState = customState)
+        val cityStorage = InMemoryCityStorage(initialCurrentCityId = "kyoto")
+        val cityRepo = DefaultCityRepository(cityStorage)
 
-        val viewModel = WeatherViewModel(fakeRepo, cache)
+        val viewModel = WeatherViewModel(
+            repository = fakeRepo,
+            cache = cache,
+            cityRepository = cityRepo,
+        )
         backgroundScope.launch(testDispatcher) { viewModel.uiState.collect() }
 
         val state = viewModel.uiState.value as WeatherUiState.Success

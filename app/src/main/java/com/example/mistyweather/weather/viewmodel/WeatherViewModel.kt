@@ -16,6 +16,8 @@ import com.example.mistyweather.weather.domain.WeatherMapper
 import com.example.mistyweather.weather.domain.WeatherRenderState
 import com.example.mistyweather.weather.domain.WeatherRepository
 import com.example.mistyweather.weather.domain.WeatherState
+import com.example.mistyweather.weather.domain.usecase.DefaultGetCurrentWeatherUseCase
+import com.example.mistyweather.weather.domain.usecase.GetCurrentWeatherUseCase
 import com.example.mistyweather.weather.location.LocationProvider
 import com.example.mistyweather.weather.location.LocationResult
 import com.example.mistyweather.weather.runtime.WeatherAppState
@@ -99,6 +101,7 @@ class WeatherViewModel(
     private val cache: WeatherCache = WeatherModule.container.weatherCache,
     private val cityRepository: CityRepository = WeatherModule.container.cityRepository,
     private val locationProvider: LocationProvider = WeatherModule.container.locationProvider,
+    private val getCurrentWeatherUseCase: GetCurrentWeatherUseCase = DefaultGetCurrentWeatherUseCase(cityRepository, repository),
 ) : ViewModel() {
 
     private val _timeOfDayOverride = MutableStateFlow<TimeOfDay?>(null)
@@ -173,60 +176,53 @@ class WeatherViewModel(
     val appState: StateFlow<WeatherAppState> = _appState.asStateFlow()
 
     /**
-     * Reactive UI state combining dynamic city coordinates, repository stream, disk cache,
-     * environmental time, and runtime sync states.
+     * Reactive UI state combining Use Case stream, environmental time,
+     * and runtime sync states.
      */
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<WeatherUiState> = _currentCity.flatMapLatest { city ->
-        combine(
-            repository.getWeatherByCoordinates(
-                latitude      = city.latitude,
-                longitude     = city.longitude,
-                cityName      = city.name,
-                cityNameLatin = city.nameLatin,
-            ),
-            _timeOfDayOverride,
-            _activeError,
-            _isRefreshing,
-        ) { domainState, overrideTime, activeError, isRefreshing ->
-            val (activeTime, progress) = resolveTimeAndProgress(overrideTime)
+    val uiState: StateFlow<WeatherUiState> = combine(
+        getCurrentWeatherUseCase(),
+        _timeOfDayOverride,
+        _activeError,
+        _isRefreshing,
+    ) { domainState, overrideTime, activeError, isRefreshing ->
+        val (activeTime, progress) = resolveTimeAndProgress(overrideTime)
 
-            val renderState = WeatherMapper.toRenderState(
-                weatherType  = domainState.weatherType,
-                timeOfDay    = activeTime,
-                timeProgress = progress,
-            )
-            val preview = WeatherMapper.toWeatherPreview(domainState, activeTime)
-            val forecastSlots = WeatherMapper.toForecastSlots(domainState.hourlyForecast)
+        val renderState = WeatherMapper.toRenderState(
+            weatherType  = domainState.weatherType,
+            timeOfDay    = activeTime,
+            timeProgress = progress,
+        )
+        val preview = WeatherMapper.toWeatherPreview(domainState, activeTime)
+        val forecastSlots = WeatherMapper.toForecastSlots(domainState.hourlyForecast)
 
-            val successState = WeatherUiState.Success(
-                weatherState             = domainState,
-                renderState              = renderState,
-                preview                  = preview,
-                forecastSlots            = forecastSlots,
-                activeTimeOfDay          = activeTime,
-                lastRefreshedEpochMillis = System.currentTimeMillis(),
-            )
+        val successState = WeatherUiState.Success(
+            weatherState             = domainState,
+            renderState              = renderState,
+            preview                  = preview,
+            forecastSlots            = forecastSlots,
+            activeTimeOfDay          = activeTime,
+            lastRefreshedEpochMillis = System.currentTimeMillis(),
+        )
 
-            // Update memory and disk cache
-            lastKnownSuccess = successState
-            val cacheKey = if (city.isCurrentLocation) "current_location" else city.id
-            cache.save(CachedWeather(cacheKey, domainState, renderState, System.currentTimeMillis()))
+        // Update memory and disk cache
+        lastKnownSuccess = successState
+        val city = _currentCity.value
+        val cacheKey = if (city.isCurrentLocation) "current_location" else city.id
+        cache.save(CachedWeather(cacheKey, domainState, renderState, System.currentTimeMillis()))
 
-            when {
-                activeError != null -> {
-                    WeatherUiState.Error(
-                        error           = activeError,
-                        lastKnown       = lastKnownSuccess,
-                        activeTimeOfDay = activeTime,
-                        canRetry        = true,
-                    )
-                }
-                isRefreshing -> {
-                    WeatherUiState.Refreshing(previous = successState)
-                }
-                else -> successState
+        when {
+            activeError != null -> {
+                WeatherUiState.Error(
+                    error           = activeError,
+                    lastKnown       = lastKnownSuccess,
+                    activeTimeOfDay = activeTime,
+                    canRetry        = true,
+                )
             }
+            isRefreshing -> {
+                WeatherUiState.Refreshing(previous = successState)
+            }
+            else -> successState
         }
     }.catch { throwable ->
         val error = WeatherError.fromThrowable(throwable)
@@ -359,12 +355,7 @@ class WeatherViewModel(
             try {
                 val city = _currentCity.value
                 if (city.id == cityId) {
-                    repository.refreshWeatherByCoordinates(
-                        latitude      = city.latitude,
-                        longitude     = city.longitude,
-                        cityName      = city.name,
-                        cityNameLatin = city.nameLatin,
-                    )
+                    getCurrentWeatherUseCase.refresh()
                 } else {
                     repository.refreshWeather(cityId)
                 }
@@ -425,10 +416,11 @@ class WeatherViewModel(
             cache: WeatherCache = WeatherModule.container.weatherCache,
             cityRepository: CityRepository = WeatherModule.container.cityRepository,
             locationProvider: LocationProvider = WeatherModule.container.locationProvider,
+            getCurrentWeatherUseCase: GetCurrentWeatherUseCase = WeatherModule.container.getCurrentWeatherUseCase,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return WeatherViewModel(repository, cache, cityRepository, locationProvider) as T
+                return WeatherViewModel(repository, cache, cityRepository, locationProvider, getCurrentWeatherUseCase) as T
             }
         }
     }

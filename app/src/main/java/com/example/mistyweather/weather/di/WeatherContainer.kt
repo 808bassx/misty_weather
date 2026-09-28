@@ -12,6 +12,8 @@ import com.example.mistyweather.weather.data.remote.RemoteWeatherRepository
 import com.example.mistyweather.weather.data.remote.WeatherApi
 import com.example.mistyweather.weather.data.remote.WeatherApiClient
 import com.example.mistyweather.weather.domain.WeatherRepository
+import com.example.mistyweather.weather.domain.usecase.DefaultGetCurrentWeatherUseCase
+import com.example.mistyweather.weather.domain.usecase.GetCurrentWeatherUseCase
 import com.example.mistyweather.weather.location.FakeLocationProvider
 import com.example.mistyweather.weather.location.LocationProvider
 
@@ -36,6 +38,8 @@ interface WeatherContainer {
         get() = DefaultCityRepository(cityStorage)
     val locationProvider: LocationProvider
         get() = FakeLocationProvider()
+    val getCurrentWeatherUseCase: GetCurrentWeatherUseCase
+        get() = DefaultGetCurrentWeatherUseCase(cityRepository, weatherRepository)
 }
 
 /**
@@ -55,6 +59,8 @@ class DefaultWeatherContainer(
     } else {
         FakeWeatherRepository()
     },
+    override val getCurrentWeatherUseCase: GetCurrentWeatherUseCase =
+        DefaultGetCurrentWeatherUseCase(cityRepository, weatherRepository),
 ) : WeatherContainer {
     companion object {
         fun createRemote(

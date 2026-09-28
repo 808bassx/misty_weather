@@ -2,6 +2,7 @@ package com.example.mistyweather.weather.city
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 
 // ─── City Repository Contract & Implementation ────────────────────────────────
@@ -36,7 +37,7 @@ class DefaultCityRepository(
         favorites.find { it.id == currentId }
             ?: availableCatalog.find { it.id == currentId }
             ?: City.Tokyo
-    }
+    }.distinctUntilChanged()
 
     override suspend fun addFavorite(city: City) {
         val currentFavorites = storage.getFavoriteCities().first().toMutableList()
