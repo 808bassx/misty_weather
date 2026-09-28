@@ -2,10 +2,13 @@ package com.example.mistyweather.weather.viewmodel
 
 import com.example.mistyweather.core.weather.WeatherType
 import com.example.mistyweather.weather.atmosphere.TimeOfDay
+import com.example.mistyweather.weather.cache.CachedWeather
+import com.example.mistyweather.weather.cache.InMemoryWeatherCache
 import com.example.mistyweather.weather.data.FakeWeatherRepository
 import com.example.mistyweather.weather.di.WeatherContainer
 import com.example.mistyweather.weather.di.WeatherModule
 import com.example.mistyweather.weather.domain.WeatherCondition
+import com.example.mistyweather.weather.domain.WeatherMapper
 import com.example.mistyweather.weather.runtime.WeatherConnection
 import com.example.mistyweather.weather.runtime.WeatherError
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +31,7 @@ import java.net.UnknownHostException
 
 // ─── Weather ViewModel Tests ──────────────────────────────────────────────────
 //
-// Phase 4.1: Runtime Experience & State Architecture Unit Tests.
+// Phase 4.1.5: Persistent Offline Weather Cache & State Machine Unit Tests.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -121,6 +124,7 @@ class WeatherViewModelTest {
         )
         val customContainer = object : WeatherContainer {
             override val weatherRepository = customRepo
+            override val weatherCache = InMemoryWeatherCache()
         }
 
         WeatherModule.setCustomContainer(customContainer)
@@ -139,7 +143,7 @@ class WeatherViewModelTest {
     }
 
     @Test
-    fun `WeatherViewModel error recovery preserves lastKnownWeather and renderState`() = runTest {
+    fun `WeatherViewModel error recovery preserves lastKnown and renderState`() = runTest {
         val fakeRepo = FakeWeatherRepository()
         val viewModel = WeatherViewModel(fakeRepo)
         backgroundScope.launch(testDispatcher) { viewModel.uiState.collect() }
@@ -155,8 +159,9 @@ class WeatherViewModelTest {
         val err = errorState as WeatherUiState.Error
 
         assertEquals(WeatherError.RequestTimeout, err.error)
-        assertNotNull("Last known weather must be preserved", err.lastKnownWeather)
-        assertNotNull("Last known render state must be preserved for uninterrupted canvas", err.lastKnownRenderState)
+        assertNotNull("Last known success must be preserved", err.lastKnown)
+        assertNotNull("Last known weather must be preserved", err.lastKnown?.weatherState)
+        assertNotNull("Last known render state must be preserved for uninterrupted canvas", err.lastKnown?.renderState)
         assertFalse(err.error.userFacingMessage.isBlank())
         assertTrue(err.canRetry)
 
@@ -182,6 +187,43 @@ class WeatherViewModelTest {
         viewModel.setConnection(WeatherConnection.Online)
         assertEquals(WeatherConnection.Online, viewModel.appState.value.connection)
         assertTrue(viewModel.uiState.value is WeatherUiState.Success)
+    }
+
+    @Test
+    fun `WeatherViewModel cold start loads from persistent cache immediately`() = runTest {
+        val customState = FakeWeatherRepository.canonicalTokyoWeather.copy(
+            cityName    = "京都",
+            temperature = 19,
+        )
+        val customRender = WeatherMapper.toRenderState(customState, TimeOfDay.Morning)
+        val cache = InMemoryWeatherCache(
+            initialWeather = CachedWeather("kyoto", customState, customRender, 1727530000000L)
+        )
+        val fakeRepo = FakeWeatherRepository(initialState = customState)
+
+        val viewModel = WeatherViewModel(fakeRepo, cache)
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect() }
+
+        val state = viewModel.uiState.value as WeatherUiState.Success
+        assertEquals("京都", state.weatherState.cityName)
+        assertEquals(19, state.weatherState.temperature)
+        assertEquals(state.activeTimeOfDay, state.renderState.timeOfDay)
+    }
+
+    @Test
+    fun `WeatherViewModel refreshWeather transitions through sync cycle successfully`() = runTest {
+        val fakeRepo = FakeWeatherRepository()
+        val viewModel = WeatherViewModel(fakeRepo)
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect() }
+
+        val initial = viewModel.uiState.value
+        assertTrue("Initial state must be Success", initial is WeatherUiState.Success)
+
+        viewModel.refreshWeather("tokyo")
+        val afterSync = viewModel.uiState.value
+        assertTrue("State after sync must remain Success", afterSync is WeatherUiState.Success)
+        assertFalse(viewModel.appState.value.isSyncing)
+        assertEquals("tokyo", (afterSync as WeatherUiState.Success).preview.cityLatin.lowercase())
     }
 
     @Test

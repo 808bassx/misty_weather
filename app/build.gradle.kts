@@ -81,4 +81,8 @@ dependencies {
   implementation(libs.androidx.navigation3.ui)
   implementation(libs.androidx.navigation3.runtime)
   implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+
+  // DataStore Preferences for Weather Cache
+  implementation("androidx.datastore:datastore-preferences:1.1.1")
+  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 }

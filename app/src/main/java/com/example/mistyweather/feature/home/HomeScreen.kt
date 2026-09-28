@@ -111,11 +111,24 @@ fun HomeScreen(
                 modifier       = modifier,
             )
         }
-        is WeatherUiState.Error -> {
+        is WeatherUiState.Refreshing -> {
             HomeScreenContent(
-                weather        = state.lastKnownPreview ?: PreviewWeatherTokyo,
-                forecast       = state.lastKnownForecastSlots ?: PreviewForecastSlots,
-                renderState    = state.lastKnownRenderState,
+                weather        = state.previous.preview,
+                forecast       = state.previous.forecastSlots,
+                renderState    = state.previous.renderState,
+                timeOfDay      = timeOfDay ?: state.previous.activeTimeOfDay,
+                runtimeNotice  = "正在同步天气数据...",
+                onRetryNotice  = null,
+                onOpenShowcase = onOpenShowcase,
+                modifier       = modifier,
+            )
+        }
+        is WeatherUiState.Error -> {
+            val lastKnown = state.lastKnown
+            HomeScreenContent(
+                weather        = lastKnown?.preview ?: PreviewWeatherTokyo,
+                forecast       = lastKnown?.forecastSlots ?: PreviewForecastSlots,
+                renderState    = lastKnown?.renderState,
                 timeOfDay      = timeOfDay ?: state.activeTimeOfDay,
                 runtimeNotice  = state.error.userFacingMessage,
                 onRetryNotice  = if (state.canRetry) { { viewModel.refreshWeather() } } else null,

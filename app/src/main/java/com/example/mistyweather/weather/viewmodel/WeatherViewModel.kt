@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.mistyweather.core.weather.ForecastSlot
 import com.example.mistyweather.core.weather.WeatherPreview
 import com.example.mistyweather.weather.atmosphere.TimeOfDay
+import com.example.mistyweather.weather.cache.CachedWeather
+import com.example.mistyweather.weather.cache.WeatherCache
 import com.example.mistyweather.weather.data.FakeWeatherRepository
 import com.example.mistyweather.weather.di.WeatherModule
 import com.example.mistyweather.weather.domain.WeatherMapper
@@ -27,24 +29,27 @@ import java.util.Calendar
 
 // ─── Weather UI State ─────────────────────────────────────────────────────────
 //
-// Phase 4.1: Runtime Experience & State Architecture.
+// Phase 4.1.5: Persistent Offline Weather Cache State Machine.
 //
-// Robust state machine: Loading, Success, and Error with cache preservation.
-// Protects downstream UI from crashing or blanking during network disruptions.
+// Complete lifecycle states:
+//   • Loading: cold boot before cache retrieval.
+//   • Success: active, healthy weather data.
+//   • Refreshing: seamless background sync preserving the previous visual state.
+//   • Error: error state retaining last-known cache for uninterrupted Canvas rendering.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
 sealed interface WeatherUiState {
-    /** Initial or cold-start loading state. */
+    /** Cold boot initialization before initial cache read. */
     data object Loading : WeatherUiState
 
     /**
-     * Successful weather state delivery.
+     * Active weather state delivery.
      *
-     * @param weatherState     Pure domain state (temperatures, sunrise/sunset, hourly slots).
+     * @param weatherState     Pure domain state.
      * @param renderState      Frozen contract consumed by [CinematicWeatherScene].
-     * @param preview          Compatibility presentation model for home screen header/details.
-     * @param forecastSlots    Hourly slots for the horizontal forecast card.
+     * @param preview          Compatibility presentation model.
+     * @param forecastSlots    Hourly slots.
      * @param activeTimeOfDay  Currently active diurnal lighting phase.
      * @param lastRefreshedEpochMillis Timestamp of this refresh.
      */
@@ -58,22 +63,19 @@ sealed interface WeatherUiState {
     ) : WeatherUiState
 
     /**
+     * Background refresh state.
+     * Preserves the previous [Success] state so Canvas rendering and glass cards never flicker.
+     */
+    data class Refreshing(
+        val previous: Success,
+    ) : WeatherUiState
+
+    /**
      * Error state preserving last-known weather data for seamless fallback rendering.
-     *
-     * @param error                 Typed domain error.
-     * @param lastKnownWeather      Cached domain state before error occurred (or baseline fallback).
-     * @param lastKnownRenderState  Cached rendering contract so Canvas background never blanks out.
-     * @param lastKnownPreview      Cached UI presentation model.
-     * @param lastKnownForecastSlots Cached forecast list.
-     * @param activeTimeOfDay       Active diurnal phase.
-     * @param canRetry              Whether user can trigger a re-fetch.
      */
     data class Error(
         val error: WeatherError,
-        val lastKnownWeather: WeatherState?,
-        val lastKnownRenderState: WeatherRenderState?,
-        val lastKnownPreview: WeatherPreview?,
-        val lastKnownForecastSlots: List<ForecastSlot>?,
+        val lastKnown: Success?,
         val activeTimeOfDay: TimeOfDay,
         val canRetry: Boolean = true,
     ) : WeatherUiState
@@ -82,31 +84,56 @@ sealed interface WeatherUiState {
 // ─── Weather ViewModel ───────────────────────────────────────────────────────
 
 /**
- * ViewModel orchestrating weather domain data, atmospheric time, runtime errors,
- * and the frozen [WeatherRenderState] rendering contract.
+ * ViewModel orchestrating domain weather data, persistent disk cache ([WeatherCache]),
+ * runtime errors, and the frozen [WeatherRenderState] rendering contract.
  */
 class WeatherViewModel(
     private val repository: WeatherRepository = WeatherModule.container.weatherRepository,
+    private val cache: WeatherCache = WeatherModule.container.weatherCache,
 ) : ViewModel() {
 
     private val _timeOfDayOverride = MutableStateFlow<TimeOfDay?>(null)
     private val _activeError = MutableStateFlow<WeatherError?>(null)
+    private val _isRefreshing = MutableStateFlow(false)
     private val _appState = MutableStateFlow(WeatherAppState())
 
-    // Cache of last known successful domain & rendering models
-    private var lastKnownWeather: WeatherState? = FakeWeatherRepository.canonicalTokyoWeather
-    private var lastKnownRenderState: WeatherRenderState? = WeatherMapper.toRenderState(
-        weatherType  = FakeWeatherRepository.canonicalTokyoWeather.weatherType,
-        timeOfDay    = TimeOfDay.Noon,
-        timeProgress = 0.5f,
-    )
-    private var lastKnownPreview: WeatherPreview? = WeatherMapper.toWeatherPreview(
-        FakeWeatherRepository.canonicalTokyoWeather,
-        TimeOfDay.Noon,
-    )
-    private var lastKnownForecastSlots: List<ForecastSlot>? = WeatherMapper.toForecastSlots(
-        FakeWeatherRepository.canonicalTokyoWeather.hourlyForecast,
-    )
+    // Memory cache of last valid success state for error fallback & seamless refreshing
+    private var lastKnownSuccess: WeatherUiState.Success? = null
+
+    init {
+        // Cold start: prioritize reading persistent cache from disk
+        viewModelScope.launch {
+            val cached = cache.load()
+            if (cached != null) {
+                val preview = WeatherMapper.toWeatherPreview(cached.weatherState, cached.renderState.timeOfDay)
+                val forecast = WeatherMapper.toForecastSlots(cached.weatherState.hourlyForecast)
+                val success = WeatherUiState.Success(
+                    weatherState             = cached.weatherState,
+                    renderState              = cached.renderState,
+                    preview                  = preview,
+                    forecastSlots            = forecast,
+                    activeTimeOfDay          = cached.renderState.timeOfDay,
+                    lastRefreshedEpochMillis = cached.timestamp,
+                )
+                lastKnownSuccess = success
+            } else {
+                // Initialize default cache
+                val defaultState = FakeWeatherRepository.canonicalTokyoWeather
+                val (defaultTime, defaultProgress) = resolveTimeAndProgress(null)
+                val renderState = WeatherMapper.toRenderState(defaultState.weatherType, defaultTime, defaultProgress)
+                val defaultSuccess = WeatherUiState.Success(
+                    weatherState             = defaultState,
+                    renderState              = renderState,
+                    preview                  = WeatherMapper.toWeatherPreview(defaultState, defaultTime),
+                    forecastSlots            = WeatherMapper.toForecastSlots(defaultState.hourlyForecast),
+                    activeTimeOfDay          = defaultTime,
+                    lastRefreshedEpochMillis = System.currentTimeMillis(),
+                )
+                lastKnownSuccess = defaultSuccess
+                cache.save(CachedWeather("tokyo", defaultState, renderState, System.currentTimeMillis()))
+            }
+        }
+    }
 
     /**
      * Global runtime connection & sync telemetry.
@@ -114,14 +141,15 @@ class WeatherViewModel(
     val appState: StateFlow<WeatherAppState> = _appState.asStateFlow()
 
     /**
-     * Current reactive UI state combining repository stream, environmental time,
-     * and runtime error state.
+     * Reactive UI state combining repository stream, disk cache, environmental time,
+     * and runtime sync states.
      */
     val uiState: StateFlow<WeatherUiState> = combine(
         repository.getWeather("tokyo"),
         _timeOfDayOverride,
         _activeError,
-    ) { domainState, overrideTime, activeError ->
+        _isRefreshing,
+    ) { domainState, overrideTime, activeError, isRefreshing ->
         val (activeTime, progress) = resolveTimeAndProgress(overrideTime)
 
         val renderState = WeatherMapper.toRenderState(
@@ -132,31 +160,32 @@ class WeatherViewModel(
         val preview = WeatherMapper.toWeatherPreview(domainState, activeTime)
         val forecastSlots = WeatherMapper.toForecastSlots(domainState.hourlyForecast)
 
-        // Cache successful data for error resilience
-        lastKnownWeather = domainState
-        lastKnownRenderState = renderState
-        lastKnownPreview = preview
-        lastKnownForecastSlots = forecastSlots
+        val successState = WeatherUiState.Success(
+            weatherState             = domainState,
+            renderState              = renderState,
+            preview                  = preview,
+            forecastSlots            = forecastSlots,
+            activeTimeOfDay          = activeTime,
+            lastRefreshedEpochMillis = System.currentTimeMillis(),
+        )
 
-        if (activeError != null) {
-            WeatherUiState.Error(
-                error                  = activeError,
-                lastKnownWeather       = lastKnownWeather,
-                lastKnownRenderState   = lastKnownRenderState,
-                lastKnownPreview       = lastKnownPreview,
-                lastKnownForecastSlots = lastKnownForecastSlots,
-                activeTimeOfDay        = activeTime,
-                canRetry               = true,
-            )
-        } else {
-            WeatherUiState.Success(
-                weatherState             = domainState,
-                renderState              = renderState,
-                preview                  = preview,
-                forecastSlots            = forecastSlots,
-                activeTimeOfDay          = activeTime,
-                lastRefreshedEpochMillis = System.currentTimeMillis(),
-            )
+        // Update memory and disk cache
+        lastKnownSuccess = successState
+        cache.save(CachedWeather("tokyo", domainState, renderState, System.currentTimeMillis()))
+
+        when {
+            activeError != null -> {
+                WeatherUiState.Error(
+                    error           = activeError,
+                    lastKnown       = lastKnownSuccess,
+                    activeTimeOfDay = activeTime,
+                    canRetry        = true,
+                )
+            }
+            isRefreshing -> {
+                WeatherUiState.Refreshing(previous = successState)
+            }
+            else -> successState
         }
     }.catch { throwable ->
         val error = WeatherError.fromThrowable(throwable)
@@ -166,13 +195,10 @@ class WeatherViewModel(
 
         emit(
             WeatherUiState.Error(
-                error                  = error,
-                lastKnownWeather       = lastKnownWeather,
-                lastKnownRenderState   = lastKnownRenderState,
-                lastKnownPreview       = lastKnownPreview,
-                lastKnownForecastSlots = lastKnownForecastSlots,
-                activeTimeOfDay        = activeTime,
-                canRetry               = true,
+                error           = error,
+                lastKnown       = lastKnownSuccess,
+                activeTimeOfDay = activeTime,
+                canRetry        = true,
             )
         )
     }.stateIn(
@@ -201,10 +227,11 @@ class WeatherViewModel(
     }
 
     /**
-     * Triggers a refresh and clears transient errors.
+     * Triggers a refresh while transitioning to [WeatherUiState.Refreshing].
      */
     fun refreshWeather(cityId: String = "tokyo") {
         viewModelScope.launch {
+            _isRefreshing.value = true
             _appState.value = _appState.value.copy(isSyncing = true)
             try {
                 repository.refreshWeather(cityId)
@@ -221,6 +248,8 @@ class WeatherViewModel(
                     isSyncing   = false,
                     activeError = error,
                 )
+            } finally {
+                _isRefreshing.value = false
             }
         }
     }
@@ -260,10 +289,11 @@ class WeatherViewModel(
          */
         fun provideFactory(
             repository: WeatherRepository = WeatherModule.container.weatherRepository,
+            cache: WeatherCache = WeatherModule.container.weatherCache,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return WeatherViewModel(repository) as T
+                return WeatherViewModel(repository, cache) as T
             }
         }
     }

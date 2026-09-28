@@ -1,15 +1,16 @@
 package com.example.mistyweather.weather.di
 
+import com.example.mistyweather.weather.cache.InMemoryWeatherCache
+import com.example.mistyweather.weather.cache.WeatherCache
 import com.example.mistyweather.weather.data.FakeWeatherRepository
 import com.example.mistyweather.weather.domain.WeatherRepository
 
 // ─── Weather DI Container ─────────────────────────────────────────────────────
 //
-// Phase 4.0: Dependency Injection Foundation.
+// Phase 4.0 & 4.1.5: Dependency Injection Foundation.
 //
-// Establishes a lightweight, testable container for weather data sources.
-// Decouples ViewModel from concrete repository implementations.
-// In Phase 4.2, RemoteWeatherRepository can be seamlessly injected here.
+// Establishes a lightweight, testable container for weather data sources and cache.
+// Decouples ViewModel from concrete repository and persistence implementations.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -18,14 +19,16 @@ import com.example.mistyweather.weather.domain.WeatherRepository
  */
 interface WeatherContainer {
     val weatherRepository: WeatherRepository
+    val weatherCache: WeatherCache
 }
 
 /**
  * Default container configuration.
- * Provides offline [FakeWeatherRepository] for Phase 4.0 & 4.1.
+ * Provides offline [FakeWeatherRepository] and [WeatherCache].
  */
 class DefaultWeatherContainer(
     override val weatherRepository: WeatherRepository = FakeWeatherRepository(),
+    override val weatherCache: WeatherCache = InMemoryWeatherCache(),
 ) : WeatherContainer
 
 /**
