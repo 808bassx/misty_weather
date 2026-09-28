@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.mistyweather.core.weather.WeatherType
@@ -13,6 +14,8 @@ import com.example.mistyweather.theme.MistyWeatherTheme
 import com.example.mistyweather.weather.animation.rememberAtmosphereTransition
 import com.example.mistyweather.weather.animation.rememberWeatherMotion
 import com.example.mistyweather.weather.atmosphere.TimeOfDay
+import com.example.mistyweather.weather.domain.WeatherMapper
+import com.example.mistyweather.weather.domain.WeatherRenderState
 import java.time.LocalTime
 
 // ─── Cinematic Weather Scene ─────────────────────────────────────────────────
@@ -49,15 +52,24 @@ import java.time.LocalTime
  * @param timeProgress Progress within the time phase [0, 1]. Defaults to 0.5.
  * @param modifier     Should be [Modifier.fillMaxSize()].
  */
+/**
+ * Primary frozen rendering entrypoint: receives an immutable [WeatherRenderState].
+ * All data transformations happen prior to entering the rendering pipeline.
+ *
+ * @param state     Frozen render state containing weather condition, atmosphere, and time.
+ * @param modifier  Should be [Modifier.fillMaxSize()].
+ */
 @Composable
 fun CinematicWeatherScene(
-    weatherType: WeatherType,
-    timeOfDay: TimeOfDay = TimeOfDay.Noon,
-    timeProgress: Float = 0.5f,
+    state: WeatherRenderState,
     modifier: Modifier = Modifier.fillMaxSize(),
 ) {
     // ── Atmosphere: spring-interpolated state across weather & diurnal time ────
-    val env by rememberAtmosphereTransition(weatherType, timeOfDay, timeProgress)
+    val env by rememberAtmosphereTransition(
+        weatherType  = state.weatherType,
+        timeOfDay    = state.timeOfDay,
+        timeProgress = state.timeProgress,
+    )
 
     // ── Motion Clocks: single shared infinite transition ──────────────────────
     val motion = rememberWeatherMotion()
@@ -96,6 +108,23 @@ fun CinematicWeatherScene(
             modifier  = Modifier.fillMaxSize(),
         )
     }
+}
+
+/**
+ * Convenience overload driving [CinematicWeatherScene] from [weatherType] and [timeOfDay].
+ * Internally delegates to the frozen [WeatherRenderState] entrypoint via [WeatherMapper].
+ */
+@Composable
+fun CinematicWeatherScene(
+    weatherType: WeatherType,
+    timeOfDay: TimeOfDay = TimeOfDay.Noon,
+    timeProgress: Float = 0.5f,
+    modifier: Modifier = Modifier.fillMaxSize(),
+) {
+    val renderState = remember(weatherType, timeOfDay, timeProgress) {
+        WeatherMapper.toRenderState(weatherType, timeOfDay, timeProgress)
+    }
+    CinematicWeatherScene(state = renderState, modifier = modifier)
 }
 
 /**
