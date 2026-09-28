@@ -1,6 +1,7 @@
 package com.example.mistyweather.feature.home
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -112,9 +113,12 @@ fun HomeScreen(
         }
         is WeatherUiState.Error -> {
             HomeScreenContent(
-                weather        = PreviewWeatherTokyo,
-                forecast       = PreviewForecastSlots,
-                timeOfDay      = timeOfDay,
+                weather        = state.lastKnownPreview ?: PreviewWeatherTokyo,
+                forecast       = state.lastKnownForecastSlots ?: PreviewForecastSlots,
+                renderState    = state.lastKnownRenderState,
+                timeOfDay      = timeOfDay ?: state.activeTimeOfDay,
+                runtimeNotice  = state.error.userFacingMessage,
+                onRetryNotice  = if (state.canRetry) { { viewModel.refreshWeather() } } else null,
                 onOpenShowcase = onOpenShowcase,
                 modifier       = modifier,
             )
@@ -132,6 +136,8 @@ internal fun HomeScreenContent(
     forecast: List<ForecastSlot>,
     renderState: WeatherRenderState? = null,
     timeOfDay: TimeOfDay? = null,
+    runtimeNotice: String? = null,
+    onRetryNotice: (() -> Unit)? = null,
     onOpenShowcase: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -176,6 +182,31 @@ internal fun HomeScreenContent(
                     city      = weather.city,
                     cityLatin = weather.cityLatin,
                 )
+
+                // Runtime offline / error notification pill
+                if (runtimeNotice != null) {
+                    Spacer(Modifier.height(MistyDimensions.Space12))
+                    GlassSurface(
+                        level    = GlassLevel.Thin,
+                        shape    = MistyShapes.Pill,
+                        modifier = Modifier
+                            .wrapContentHeight()
+                            .clickable(enabled = onRetryNotice != null) { onRetryNotice?.invoke() },
+                    ) {
+                        Row(
+                            modifier              = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                            verticalAlignment     = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            Text(
+                                text      = "⚡ $runtimeNotice" + if (onRetryNotice != null) " · 点击重试" else "",
+                                style     = MistyType.ForecastTime,
+                                color     = MistyColors.TextOnGlassSecondary,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                }
 
                 Spacer(Modifier.height(MistyDimensions.Space48))
 

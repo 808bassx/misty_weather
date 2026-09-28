@@ -6,6 +6,8 @@ import com.example.mistyweather.weather.data.FakeWeatherRepository
 import com.example.mistyweather.weather.di.WeatherContainer
 import com.example.mistyweather.weather.di.WeatherModule
 import com.example.mistyweather.weather.domain.WeatherCondition
+import com.example.mistyweather.weather.runtime.WeatherConnection
+import com.example.mistyweather.weather.runtime.WeatherError
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collect
@@ -16,14 +18,17 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 
 // ─── Weather ViewModel Tests ──────────────────────────────────────────────────
 //
-// Phase 4.0: Offline First Weather Pipeline & DI Integration Tests.
+// Phase 4.1: Runtime Experience & State Architecture Unit Tests.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -131,5 +136,64 @@ class WeatherViewModelTest {
 
         val defaultState = defaultVm.uiState.value as WeatherUiState.Success
         assertEquals(23, defaultState.weatherState.temperature)
+    }
+
+    @Test
+    fun `WeatherViewModel error recovery preserves lastKnownWeather and renderState`() = runTest {
+        val fakeRepo = FakeWeatherRepository()
+        val viewModel = WeatherViewModel(fakeRepo)
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect() }
+
+        // Initial healthy state
+        assertTrue(viewModel.uiState.value is WeatherUiState.Success)
+
+        // Inject simulated error
+        viewModel.simulateError(WeatherError.RequestTimeout)
+
+        val errorState = viewModel.uiState.value
+        assertTrue("State should transition to Error", errorState is WeatherUiState.Error)
+        val err = errorState as WeatherUiState.Error
+
+        assertEquals(WeatherError.RequestTimeout, err.error)
+        assertNotNull("Last known weather must be preserved", err.lastKnownWeather)
+        assertNotNull("Last known render state must be preserved for uninterrupted canvas", err.lastKnownRenderState)
+        assertFalse(err.error.userFacingMessage.isBlank())
+        assertTrue(err.canRetry)
+
+        // Clear error and recover
+        viewModel.clearError()
+        assertTrue("State should recover to Success", viewModel.uiState.value is WeatherUiState.Success)
+    }
+
+    @Test
+    fun `WeatherViewModel setConnection updates runtime connection and active error`() = runTest {
+        val fakeRepo = FakeWeatherRepository()
+        val viewModel = WeatherViewModel(fakeRepo)
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect() }
+
+        // Device goes offline
+        viewModel.setConnection(WeatherConnection.Offline)
+        assertEquals(WeatherConnection.Offline, viewModel.appState.value.connection)
+        val offlineState = viewModel.uiState.value
+        assertTrue(offlineState is WeatherUiState.Error)
+        assertEquals(WeatherError.NetworkUnavailable, (offlineState as WeatherUiState.Error).error)
+
+        // Device reconnects
+        viewModel.setConnection(WeatherConnection.Online)
+        assertEquals(WeatherConnection.Online, viewModel.appState.value.connection)
+        assertTrue(viewModel.uiState.value is WeatherUiState.Success)
+    }
+
+    @Test
+    fun `WeatherError fromThrowable correctly maps network exceptions`() {
+        val networkErr = WeatherError.fromThrowable(UnknownHostException("No address"))
+        assertEquals(WeatherError.NetworkUnavailable, networkErr)
+
+        val timeoutErr = WeatherError.fromThrowable(SocketTimeoutException("Connect timed out"))
+        assertEquals(WeatherError.RequestTimeout, timeoutErr)
+
+        val genericErr = WeatherError.fromThrowable(IllegalStateException("Custom failure"))
+        assertTrue(genericErr is WeatherError.Unknown)
+        assertEquals("Custom failure", genericErr.userFacingMessage)
     }
 }
