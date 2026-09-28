@@ -30,6 +30,22 @@ class FakeWeatherRepository(
         // No-op for fake repository
     }
 
+    override fun getWeatherByCoordinates(
+        latitude: Double,
+        longitude: Double,
+        cityName: String,
+        cityNameLatin: String,
+    ): Flow<WeatherState> = _weatherFlow.asStateFlow()
+
+    override suspend fun refreshWeatherByCoordinates(
+        latitude: Double,
+        longitude: Double,
+        cityName: String,
+        cityNameLatin: String,
+    ) {
+        // No-op for fake repository
+    }
+
     /** Helper to simulate weather transitions in demo & tests. */
     fun updateWeather(newState: WeatherState) {
         _weatherFlow.value = newState

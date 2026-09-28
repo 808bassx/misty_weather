@@ -3,18 +3,24 @@ package com.example.mistyweather.weather.di
 import com.example.mistyweather.BuildConfig
 import com.example.mistyweather.weather.cache.InMemoryWeatherCache
 import com.example.mistyweather.weather.cache.WeatherCache
+import com.example.mistyweather.weather.city.CityRepository
+import com.example.mistyweather.weather.city.CityStorage
+import com.example.mistyweather.weather.city.DefaultCityRepository
+import com.example.mistyweather.weather.city.InMemoryCityStorage
 import com.example.mistyweather.weather.data.FakeWeatherRepository
 import com.example.mistyweather.weather.data.remote.RemoteWeatherRepository
 import com.example.mistyweather.weather.data.remote.WeatherApi
 import com.example.mistyweather.weather.data.remote.WeatherApiClient
 import com.example.mistyweather.weather.domain.WeatherRepository
+import com.example.mistyweather.weather.location.FakeLocationProvider
+import com.example.mistyweather.weather.location.LocationProvider
 
 // ─── Weather DI Container ─────────────────────────────────────────────────────
 //
-// Phase 4.0, 4.1.5 & 4.2: Dependency Injection Foundation.
+// Phase 4.0, 4.1.5, 4.2 & 4.3: Dependency Injection Foundation.
 //
-// Establishes a lightweight, testable container for weather data sources and cache.
-// Decouples ViewModel from concrete repository, network, and persistence implementations.
+// Establishes a lightweight, testable container for weather, location, and city systems.
+// Decouples ViewModel from concrete repositories, networks, providers, and persistence.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -24,6 +30,12 @@ import com.example.mistyweather.weather.domain.WeatherRepository
 interface WeatherContainer {
     val weatherRepository: WeatherRepository
     val weatherCache: WeatherCache
+    val cityStorage: CityStorage
+        get() = InMemoryCityStorage()
+    val cityRepository: CityRepository
+        get() = DefaultCityRepository(cityStorage)
+    val locationProvider: LocationProvider
+        get() = FakeLocationProvider()
 }
 
 /**
@@ -33,6 +45,9 @@ interface WeatherContainer {
  */
 class DefaultWeatherContainer(
     override val weatherCache: WeatherCache = InMemoryWeatherCache(),
+    override val cityStorage: CityStorage = InMemoryCityStorage(),
+    override val cityRepository: CityRepository = DefaultCityRepository(cityStorage),
+    override val locationProvider: LocationProvider = FakeLocationProvider(),
     val api: WeatherApi = WeatherApiClient.api,
     val useRemote: Boolean = !BuildConfig.DEBUG,
     override val weatherRepository: WeatherRepository = if (useRemote) {
@@ -45,17 +60,31 @@ class DefaultWeatherContainer(
         fun createRemote(
             api: WeatherApi = WeatherApiClient.api,
             cache: WeatherCache = InMemoryWeatherCache(),
+            cityStorage: CityStorage = InMemoryCityStorage(),
+            cityRepository: CityRepository = DefaultCityRepository(cityStorage),
+            locationProvider: LocationProvider = FakeLocationProvider(),
         ): DefaultWeatherContainer {
             return DefaultWeatherContainer(
                 weatherCache = cache,
+                cityStorage = cityStorage,
+                cityRepository = cityRepository,
+                locationProvider = locationProvider,
                 api = api,
                 useRemote = true,
             )
         }
 
-        fun createOffline(cache: WeatherCache = InMemoryWeatherCache()): DefaultWeatherContainer {
+        fun createOffline(
+            cache: WeatherCache = InMemoryWeatherCache(),
+            cityStorage: CityStorage = InMemoryCityStorage(),
+            cityRepository: CityRepository = DefaultCityRepository(cityStorage),
+            locationProvider: LocationProvider = FakeLocationProvider(),
+        ): DefaultWeatherContainer {
             return DefaultWeatherContainer(
                 weatherCache = cache,
+                cityStorage = cityStorage,
+                cityRepository = cityRepository,
+                locationProvider = locationProvider,
                 useRemote = false,
             )
         }

@@ -62,20 +62,67 @@ class RemoteWeatherRepository(
         fetchAndPersist(cityId)
     }
 
+    override fun getWeatherByCoordinates(
+        latitude: Double,
+        longitude: Double,
+        cityName: String,
+        cityNameLatin: String,
+    ): Flow<WeatherState> = flow {
+        val cached = cache.load()
+        if (cached != null) {
+            _weatherFlow.value = cached.weatherState
+            emit(cached.weatherState)
+        }
+
+        try {
+            fetchAndPersistCoordinates(latitude, longitude, cityName, cityNameLatin)
+        } catch (e: Exception) {
+            if (cached == null) {
+                throw e
+            }
+        }
+
+        _weatherFlow.collect { state ->
+            emit(state)
+        }
+    }.distinctUntilChanged()
+
+    override suspend fun refreshWeatherByCoordinates(
+        latitude: Double,
+        longitude: Double,
+        cityName: String,
+        cityNameLatin: String,
+    ) {
+        fetchAndPersistCoordinates(latitude, longitude, cityName, cityNameLatin)
+    }
+
     /**
-     * Executes remote network call, maps response to domain state, and saves to cache.
+     * Executes remote network call for a cityId, maps response to domain state, and saves to cache.
      */
     suspend fun fetchAndPersist(cityId: String = "tokyo"): WeatherState {
         val (lat, lon, name, nameLatin) = resolveCoordinates(cityId)
-        val dto = api.getForecast(latitude = lat, longitude = lon)
-        val domainState = WeatherDtoMapper.toDomainState(dto, name, nameLatin)
+        return fetchAndPersistCoordinates(lat, lon, name, nameLatin, locationKey = cityId)
+    }
+
+    /**
+     * Executes remote network call for explicit coordinates, maps response to domain state, and saves to cache.
+     */
+    suspend fun fetchAndPersistCoordinates(
+        latitude: Double,
+        longitude: Double,
+        cityName: String,
+        cityNameLatin: String,
+        locationKey: String = "coord_${latitude}_${longitude}",
+    ): WeatherState {
+        val dto = api.getForecast(latitude = latitude, longitude = longitude)
+        val domainState = WeatherDtoMapper.toDomainState(dto, cityName, cityNameLatin)
 
         _weatherFlow.value = domainState
 
         // Write-through to cache
         val (time, progress) = resolveDiurnalTime()
         val renderState = WeatherMapper.toRenderState(domainState.weatherType, time, progress)
-        cache.save(CachedWeather(cityId, domainState, renderState, System.currentTimeMillis()))
+        cache.save(CachedWeather(locationKey, domainState, renderState, System.currentTimeMillis()))
 
         return domainState
     }

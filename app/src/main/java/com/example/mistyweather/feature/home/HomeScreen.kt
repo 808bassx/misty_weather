@@ -1,5 +1,8 @@
 package com.example.mistyweather.feature.home
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -90,6 +94,34 @@ fun HomeScreen(
     onOpenShowcase: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val currentCity by viewModel.currentCity.collectAsStateWithLifecycle()
+    val favoriteCities by viewModel.favoriteCities.collectAsStateWithLifecycle()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+    val locationNotice by viewModel.locationNotice.collectAsStateWithLifecycle()
+
+    var showCityDialog by remember { mutableStateOf(false) }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { permissions ->
+        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
+            viewModel.requestCurrentLocation()
+        } else {
+            viewModel.onLocationPermissionDenied()
+        }
+    }
+
+    val onCityClick = { showCityDialog = true }
+    val onUseMyLocation = {
+        locationPermissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+            ),
+        )
+    }
 
     when (val state = uiState) {
         WeatherUiState.Loading -> {
@@ -97,7 +129,9 @@ fun HomeScreen(
                 weather        = PreviewWeatherTokyo,
                 forecast       = PreviewForecastSlots,
                 timeOfDay      = timeOfDay,
+                runtimeNotice  = locationNotice,
                 onOpenShowcase = onOpenShowcase,
+                onCityClick    = onCityClick,
                 modifier       = modifier,
             )
         }
@@ -107,7 +141,9 @@ fun HomeScreen(
                 forecast       = state.forecastSlots,
                 renderState    = state.renderState,
                 timeOfDay      = timeOfDay ?: state.activeTimeOfDay,
+                runtimeNotice  = locationNotice,
                 onOpenShowcase = onOpenShowcase,
+                onCityClick    = onCityClick,
                 modifier       = modifier,
             )
         }
@@ -117,9 +153,10 @@ fun HomeScreen(
                 forecast       = state.previous.forecastSlots,
                 renderState    = state.previous.renderState,
                 timeOfDay      = timeOfDay ?: state.previous.activeTimeOfDay,
-                runtimeNotice  = "正在同步天气数据...",
+                runtimeNotice  = locationNotice ?: "正在同步天气数据...",
                 onRetryNotice  = null,
                 onOpenShowcase = onOpenShowcase,
+                onCityClick    = onCityClick,
                 modifier       = modifier,
             )
         }
@@ -130,12 +167,25 @@ fun HomeScreen(
                 forecast       = lastKnown?.forecastSlots ?: PreviewForecastSlots,
                 renderState    = lastKnown?.renderState,
                 timeOfDay      = timeOfDay ?: state.activeTimeOfDay,
-                runtimeNotice  = state.error.userFacingMessage,
+                runtimeNotice  = locationNotice ?: state.error.userFacingMessage,
                 onRetryNotice  = if (state.canRetry) { { viewModel.refreshWeather() } } else null,
                 onOpenShowcase = onOpenShowcase,
+                onCityClick    = onCityClick,
                 modifier       = modifier,
             )
         }
+    }
+
+    if (showCityDialog) {
+        CitySelectionDialog(
+            cities          = favoriteCities,
+            currentCity     = currentCity,
+            onSelectCity    = { city -> viewModel.selectCity(city) },
+            onUseMyLocation = onUseMyLocation,
+            onDismiss       = { showCityDialog = false },
+            onSearch        = { query -> viewModel.searchCities(query) },
+            searchResults   = searchResults,
+        )
     }
 }
 
@@ -152,6 +202,7 @@ internal fun HomeScreenContent(
     runtimeNotice: String? = null,
     onRetryNotice: (() -> Unit)? = null,
     onOpenShowcase: () -> Unit = {},
+    onCityClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     // Determine active diurnal phase (caller override > weather model > Noon static demo)
@@ -190,10 +241,11 @@ internal fun HomeScreenContent(
                     ),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // Location header
+                // Location header with city switcher dropdown
                 LocationHeader(
-                    city      = weather.city,
-                    cityLatin = weather.cityLatin,
+                    city        = weather.city,
+                    cityLatin   = weather.cityLatin,
+                    onCityClick = onCityClick,
                 )
 
                 // Runtime offline / error notification pill
@@ -283,6 +335,7 @@ private fun AmbientBottomWash() {
 private fun LocationHeader(
     city: String,
     cityLatin: String,
+    onCityClick: (() -> Unit)? = null,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -290,12 +343,30 @@ private fun LocationHeader(
             contentDescription = "$city ($cityLatin)"
         },
     ) {
-        Text(
-            text      = city,
-            style     = MistyType.LocationDisplay,
-            color     = MistyColors.TextOnGlass,
-            textAlign = TextAlign.Center,
-        )
+        Row(
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier              = if (onCityClick != null) {
+                Modifier.clickable(onClick = onCityClick)
+            } else {
+                Modifier
+            },
+        ) {
+            Text(
+                text      = city,
+                style     = MistyType.LocationDisplay,
+                color     = MistyColors.TextOnGlass,
+                textAlign = TextAlign.Center,
+            )
+            if (onCityClick != null) {
+                Spacer(Modifier.width(MistyDimensions.Space8))
+                Text(
+                    text  = "▼",
+                    style = MistyType.ForecastTime,
+                    color = MistyColors.TextOnGlassSecondary,
+                )
+            }
+        }
         Spacer(Modifier.height(MistyDimensions.Space4))
         Text(
             text      = cityLatin,

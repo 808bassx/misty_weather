@@ -8,28 +8,34 @@ import com.example.mistyweather.core.weather.WeatherPreview
 import com.example.mistyweather.weather.atmosphere.TimeOfDay
 import com.example.mistyweather.weather.cache.CachedWeather
 import com.example.mistyweather.weather.cache.WeatherCache
+import com.example.mistyweather.weather.city.City
+import com.example.mistyweather.weather.city.CityRepository
 import com.example.mistyweather.weather.data.FakeWeatherRepository
 import com.example.mistyweather.weather.di.WeatherModule
 import com.example.mistyweather.weather.domain.WeatherMapper
 import com.example.mistyweather.weather.domain.WeatherRenderState
 import com.example.mistyweather.weather.domain.WeatherRepository
 import com.example.mistyweather.weather.domain.WeatherState
+import com.example.mistyweather.weather.location.LocationProvider
+import com.example.mistyweather.weather.location.LocationResult
 import com.example.mistyweather.weather.runtime.WeatherAppState
 import com.example.mistyweather.weather.runtime.WeatherConnection
 import com.example.mistyweather.weather.runtime.WeatherError
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
 // ─── Weather UI State ─────────────────────────────────────────────────────────
 //
-// Phase 4.1.5: Persistent Offline Weather Cache State Machine.
+// Phase 4.1.5, 4.2 & 4.3: Weather State Machine.
 //
 // Complete lifecycle states:
 //   • Loading: cold boot before cache retrieval.
@@ -85,11 +91,14 @@ sealed interface WeatherUiState {
 
 /**
  * ViewModel orchestrating domain weather data, persistent disk cache ([WeatherCache]),
- * runtime errors, and the frozen [WeatherRenderState] rendering contract.
+ * user city management ([CityRepository]), location abstraction ([LocationProvider]),
+ * and the frozen [WeatherRenderState] rendering contract.
  */
 class WeatherViewModel(
     private val repository: WeatherRepository = WeatherModule.container.weatherRepository,
     private val cache: WeatherCache = WeatherModule.container.weatherCache,
+    private val cityRepository: CityRepository = WeatherModule.container.cityRepository,
+    private val locationProvider: LocationProvider = WeatherModule.container.locationProvider,
 ) : ViewModel() {
 
     private val _timeOfDayOverride = MutableStateFlow<TimeOfDay?>(null)
@@ -97,10 +106,33 @@ class WeatherViewModel(
     private val _isRefreshing = MutableStateFlow(false)
     private val _appState = MutableStateFlow(WeatherAppState())
 
+    private val _currentCity = MutableStateFlow(City.Tokyo)
+    val currentCity: StateFlow<City> = _currentCity.asStateFlow()
+
+    val favoriteCities: StateFlow<List<City>> = cityRepository.getFavoriteCities()
+        .stateIn(
+            scope        = viewModelScope,
+            started      = SharingStarted.WhileSubscribed(5_000),
+            initialValue = City.DefaultCities,
+        )
+
+    private val _searchResults = MutableStateFlow<List<City>>(emptyList())
+    val searchResults: StateFlow<List<City>> = _searchResults.asStateFlow()
+
+    private val _locationNotice = MutableStateFlow<String?>(null)
+    val locationNotice: StateFlow<String?> = _locationNotice.asStateFlow()
+
     // Memory cache of last valid success state for error fallback & seamless refreshing
     private var lastKnownSuccess: WeatherUiState.Success? = null
 
     init {
+        // Observe current active city from storage
+        viewModelScope.launch {
+            cityRepository.getCurrentCity().collect { city ->
+                _currentCity.value = city
+            }
+        }
+
         // Cold start: prioritize reading persistent cache from disk
         viewModelScope.launch {
             val cached = cache.load()
@@ -141,51 +173,60 @@ class WeatherViewModel(
     val appState: StateFlow<WeatherAppState> = _appState.asStateFlow()
 
     /**
-     * Reactive UI state combining repository stream, disk cache, environmental time,
-     * and runtime sync states.
+     * Reactive UI state combining dynamic city coordinates, repository stream, disk cache,
+     * environmental time, and runtime sync states.
      */
-    val uiState: StateFlow<WeatherUiState> = combine(
-        repository.getWeather("tokyo"),
-        _timeOfDayOverride,
-        _activeError,
-        _isRefreshing,
-    ) { domainState, overrideTime, activeError, isRefreshing ->
-        val (activeTime, progress) = resolveTimeAndProgress(overrideTime)
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<WeatherUiState> = _currentCity.flatMapLatest { city ->
+        combine(
+            repository.getWeatherByCoordinates(
+                latitude      = city.latitude,
+                longitude     = city.longitude,
+                cityName      = city.name,
+                cityNameLatin = city.nameLatin,
+            ),
+            _timeOfDayOverride,
+            _activeError,
+            _isRefreshing,
+        ) { domainState, overrideTime, activeError, isRefreshing ->
+            val (activeTime, progress) = resolveTimeAndProgress(overrideTime)
 
-        val renderState = WeatherMapper.toRenderState(
-            weatherType  = domainState.weatherType,
-            timeOfDay    = activeTime,
-            timeProgress = progress,
-        )
-        val preview = WeatherMapper.toWeatherPreview(domainState, activeTime)
-        val forecastSlots = WeatherMapper.toForecastSlots(domainState.hourlyForecast)
+            val renderState = WeatherMapper.toRenderState(
+                weatherType  = domainState.weatherType,
+                timeOfDay    = activeTime,
+                timeProgress = progress,
+            )
+            val preview = WeatherMapper.toWeatherPreview(domainState, activeTime)
+            val forecastSlots = WeatherMapper.toForecastSlots(domainState.hourlyForecast)
 
-        val successState = WeatherUiState.Success(
-            weatherState             = domainState,
-            renderState              = renderState,
-            preview                  = preview,
-            forecastSlots            = forecastSlots,
-            activeTimeOfDay          = activeTime,
-            lastRefreshedEpochMillis = System.currentTimeMillis(),
-        )
+            val successState = WeatherUiState.Success(
+                weatherState             = domainState,
+                renderState              = renderState,
+                preview                  = preview,
+                forecastSlots            = forecastSlots,
+                activeTimeOfDay          = activeTime,
+                lastRefreshedEpochMillis = System.currentTimeMillis(),
+            )
 
-        // Update memory and disk cache
-        lastKnownSuccess = successState
-        cache.save(CachedWeather("tokyo", domainState, renderState, System.currentTimeMillis()))
+            // Update memory and disk cache
+            lastKnownSuccess = successState
+            val cacheKey = if (city.isCurrentLocation) "current_location" else city.id
+            cache.save(CachedWeather(cacheKey, domainState, renderState, System.currentTimeMillis()))
 
-        when {
-            activeError != null -> {
-                WeatherUiState.Error(
-                    error           = activeError,
-                    lastKnown       = lastKnownSuccess,
-                    activeTimeOfDay = activeTime,
-                    canRetry        = true,
-                )
+            when {
+                activeError != null -> {
+                    WeatherUiState.Error(
+                        error           = activeError,
+                        lastKnown       = lastKnownSuccess,
+                        activeTimeOfDay = activeTime,
+                        canRetry        = true,
+                    )
+                }
+                isRefreshing -> {
+                    WeatherUiState.Refreshing(previous = successState)
+                }
+                else -> successState
             }
-            isRefreshing -> {
-                WeatherUiState.Refreshing(previous = successState)
-            }
-            else -> successState
         }
     }.catch { throwable ->
         val error = WeatherError.fromThrowable(throwable)
@@ -206,6 +247,88 @@ class WeatherViewModel(
         started      = SharingStarted.WhileSubscribed(5_000),
         initialValue = WeatherUiState.Loading,
     )
+
+    /**
+     * Switches the active city and saves to repository.
+     */
+    fun selectCity(city: City) {
+        viewModelScope.launch {
+            _currentCity.value = city
+            cityRepository.setCurrentCity(city)
+            _activeError.value = null
+        }
+    }
+
+    /**
+     * Adds a city to the user's favorites list.
+     */
+    fun addFavoriteCity(city: City) {
+        viewModelScope.launch {
+            cityRepository.addFavorite(city)
+        }
+    }
+
+    /**
+     * Removes a city from the user's favorites list.
+     */
+    fun removeFavoriteCity(cityId: String) {
+        viewModelScope.launch {
+            cityRepository.removeFavorite(cityId)
+        }
+    }
+
+    /**
+     * Searches cities from catalog.
+     */
+    fun searchCities(query: String) {
+        viewModelScope.launch {
+            _searchResults.value = cityRepository.searchCities(query)
+        }
+    }
+
+    /**
+     * Requests location update from [LocationProvider].
+     */
+    fun requestCurrentLocation() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            when (val result = locationProvider.getCurrentLocation()) {
+                is LocationResult.Success -> {
+                    val locationCity = City(
+                        id                = "current_location",
+                        name              = "当前位置",
+                        country           = "定位",
+                        latitude          = result.latitude,
+                        longitude         = result.longitude,
+                        isCurrentLocation = true,
+                    )
+                    selectCity(locationCity)
+                    _locationNotice.value = null
+                }
+                LocationResult.PermissionDenied -> {
+                    _locationNotice.value = "未授予位置权限，保留当前城市"
+                }
+                LocationResult.Unavailable -> {
+                    _locationNotice.value = "无法获取当前位置，保留当前城市"
+                }
+            }
+            _isRefreshing.value = false
+        }
+    }
+
+    /**
+     * Handler when location permission is denied by the user in the UI.
+     */
+    fun onLocationPermissionDenied() {
+        _locationNotice.value = "未授予位置权限，保留当前城市"
+    }
+
+    /**
+     * Clears transient location notices.
+     */
+    fun clearLocationNotice() {
+        _locationNotice.value = null
+    }
 
     /**
      * Sets manual [TimeOfDay] override. Pass `null` to return to dynamic diurnal tracking.
@@ -229,12 +352,22 @@ class WeatherViewModel(
     /**
      * Triggers a refresh while transitioning to [WeatherUiState.Refreshing].
      */
-    fun refreshWeather(cityId: String = "tokyo") {
+    fun refreshWeather(cityId: String = _currentCity.value.id) {
         viewModelScope.launch {
             _isRefreshing.value = true
             _appState.value = _appState.value.copy(isSyncing = true)
             try {
-                repository.refreshWeather(cityId)
+                val city = _currentCity.value
+                if (city.id == cityId) {
+                    repository.refreshWeatherByCoordinates(
+                        latitude      = city.latitude,
+                        longitude     = city.longitude,
+                        cityName      = city.name,
+                        cityNameLatin = city.nameLatin,
+                    )
+                } else {
+                    repository.refreshWeather(cityId)
+                }
                 _activeError.value = null
                 _appState.value = _appState.value.copy(
                     isSyncing               = false,
@@ -290,10 +423,12 @@ class WeatherViewModel(
         fun provideFactory(
             repository: WeatherRepository = WeatherModule.container.weatherRepository,
             cache: WeatherCache = WeatherModule.container.weatherCache,
+            cityRepository: CityRepository = WeatherModule.container.cityRepository,
+            locationProvider: LocationProvider = WeatherModule.container.locationProvider,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return WeatherViewModel(repository, cache) as T
+                return WeatherViewModel(repository, cache, cityRepository, locationProvider) as T
             }
         }
     }

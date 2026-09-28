@@ -20,4 +20,27 @@ interface WeatherRepository {
      * Refreshes weather state from the underlying data source.
      */
     suspend fun refreshWeather(cityId: String = "tokyo")
+
+    /**
+     * Continuous reactive stream of [WeatherState] for explicit geographic coordinates.
+     * Introduced in Phase 4.3 for dynamic location and multi-city support.
+     */
+    fun getWeatherByCoordinates(
+        latitude: Double,
+        longitude: Double,
+        cityName: String = "当前位置",
+        cityNameLatin: String = "Current Location",
+    ): Flow<WeatherState> = getWeather("tokyo")
+
+    /**
+     * Refreshes weather state for explicit geographic coordinates.
+     */
+    suspend fun refreshWeatherByCoordinates(
+        latitude: Double,
+        longitude: Double,
+        cityName: String = "当前位置",
+        cityNameLatin: String = "Current Location",
+    ) {
+        refreshWeather("tokyo")
+    }
 }
