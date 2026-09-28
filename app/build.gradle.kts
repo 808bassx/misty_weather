@@ -28,7 +28,7 @@ android {
     buildFeatures {
       compose = true
       aidl = false
-      buildConfig = false
+      buildConfig = true
       shaders = false
     }
 
@@ -85,4 +85,9 @@ dependencies {
   // DataStore Preferences for Weather Cache
   implementation("androidx.datastore:datastore-preferences:1.1.1")
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+
+  // Networking: Retrofit & Kotlinx Serialization Converter
+  implementation("com.squareup.retrofit2:retrofit:2.11.0")
+  implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
+  implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
