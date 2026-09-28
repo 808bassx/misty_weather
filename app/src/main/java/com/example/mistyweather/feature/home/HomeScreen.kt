@@ -43,6 +43,12 @@ import com.example.mistyweather.core.weather.PreviewForecastSlots
 import com.example.mistyweather.core.weather.PreviewWeatherTokyo
 import com.example.mistyweather.core.weather.WeatherPreview
 import com.example.mistyweather.core.weather.WeatherType
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.mistyweather.weather.domain.WeatherMapper
+import com.example.mistyweather.weather.domain.WeatherRenderState
+import com.example.mistyweather.weather.viewmodel.WeatherUiState
+import com.example.mistyweather.weather.viewmodel.WeatherViewModel
 import com.example.mistyweather.weather.scene.CinematicWeatherScene
 import com.example.mistyweather.theme.GlassLevel
 import com.example.mistyweather.theme.GlassSurface
@@ -72,32 +78,59 @@ import kotlin.math.sin
 /**
  * Home Screen entry point.
  *
- * Wires the static preview data to the stateless [HomeScreenContent].
- * In Phase 3, [timeOfDay] can be specified or defaults to preview time.
+ * In Phase 4, wired to [WeatherViewModel] and [WeatherRepository].
+ * Pulls domain data and frozen [WeatherRenderState] into [HomeScreenContent].
  */
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
+    viewModel: WeatherViewModel = viewModel(factory = WeatherViewModel.provideFactory()),
     timeOfDay: TimeOfDay? = null,
     onOpenShowcase: () -> Unit = {},
 ) {
-    HomeScreenContent(
-        weather        = PreviewWeatherTokyo,
-        forecast       = PreviewForecastSlots,
-        timeOfDay      = timeOfDay,
-        onOpenShowcase = onOpenShowcase,
-        modifier       = modifier,
-    )
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    when (val state = uiState) {
+        WeatherUiState.Loading -> {
+            HomeScreenContent(
+                weather        = PreviewWeatherTokyo,
+                forecast       = PreviewForecastSlots,
+                timeOfDay      = timeOfDay,
+                onOpenShowcase = onOpenShowcase,
+                modifier       = modifier,
+            )
+        }
+        is WeatherUiState.Success -> {
+            HomeScreenContent(
+                weather        = state.preview,
+                forecast       = state.forecastSlots,
+                renderState    = state.renderState,
+                timeOfDay      = timeOfDay ?: state.activeTimeOfDay,
+                onOpenShowcase = onOpenShowcase,
+                modifier       = modifier,
+            )
+        }
+        is WeatherUiState.Error -> {
+            HomeScreenContent(
+                weather        = PreviewWeatherTokyo,
+                forecast       = PreviewForecastSlots,
+                timeOfDay      = timeOfDay,
+                onOpenShowcase = onOpenShowcase,
+                modifier       = modifier,
+            )
+        }
+    }
 }
 
 /**
- * Stateless Home Screen content — accepts weather, forecast, and optional [timeOfDay]
+ * Stateless Home Screen content — accepts weather, forecast, and optional [renderState]
  * so Compose Previews can inject arbitrary environmental states without a ViewModel.
  */
 @Composable
 internal fun HomeScreenContent(
     weather: WeatherPreview,
     forecast: List<ForecastSlot>,
+    renderState: WeatherRenderState? = null,
     timeOfDay: TimeOfDay? = null,
     onOpenShowcase: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -105,20 +138,19 @@ internal fun HomeScreenContent(
     // Determine active diurnal phase (caller override > weather model > Noon static demo)
     val activeTime = timeOfDay ?: weather.timeOfDay ?: TimeOfDay.Noon
 
-    // Compute ambient atmosphere once per state change
-    val atmosphere = remember(weather.weatherType, activeTime) {
-        computeAmbientAtmosphere(weather.weatherType, activeTime)
+    // Compute or reuse frozen atmosphere & render state
+    val activeRenderState = renderState ?: remember(weather.weatherType, activeTime) {
+        WeatherMapper.toRenderState(weather.weatherType, activeTime)
     }
 
     // Adaptive Glass Tint: All nested GlassSurfaces inherit atmosphere.glassAmbient
-    CompositionLocalProvider(LocalGlassAmbient provides atmosphere.glassAmbient) {
+    CompositionLocalProvider(LocalGlassAmbient provides activeRenderState.atmosphere.glassAmbient) {
         Box(modifier = modifier.fillMaxSize()) {
 
-            // ── Layer 0: Cinematic Weather Background (Phase 2 & 3) ──────────
+            // ── Layer 0: Cinematic Weather Background (Frozen Contract) ──────
             CinematicWeatherScene(
-                weatherType = weather.weatherType,
-                timeOfDay   = activeTime,
-                modifier    = Modifier.fillMaxSize(),
+                state    = activeRenderState,
+                modifier = Modifier.fillMaxSize(),
             )
 
             // ── Layer 1: Bottom ambient wash — softens the transition to glass ────

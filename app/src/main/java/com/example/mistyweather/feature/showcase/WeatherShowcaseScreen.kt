@@ -57,6 +57,7 @@ import com.example.mistyweather.theme.MistyWeatherTheme
 import com.example.mistyweather.weather.atmosphere.TimeOfDay
 import com.example.mistyweather.weather.atmosphere.computeAmbientAtmosphere
 import com.example.mistyweather.weather.scene.CinematicWeatherScene
+import java.util.Calendar
 
 // ─── Weather Showcase & Visual Calibration Screen ────────────────────────────
 //
@@ -70,6 +71,14 @@ import com.example.mistyweather.weather.scene.CinematicWeatherScene
 //   • Real-time parameter sliders with collapsible HUD to ensure zero visual obstruction
 //
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** Apple Weather style dynamic atmosphere mode. */
+private enum class DynamicAtmosphereMode(val label: String) {
+    RealTime("⚡ 实时时间"),
+    Morning("🌅 晨光 (Morning)"),
+    Sunset("🌇 余晖 (Sunset)"),
+    Night("🌌 夜幕 (Night)"),
+}
 
 /** Signature calibration preset descriptor. */
 private data class ShowcasePreset(
@@ -92,8 +101,14 @@ fun WeatherShowcaseScreen(
     onNavigateBack: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    fun resolveRealTime(): TimeOfDay {
+        val cal = Calendar.getInstance()
+        return TimeOfDay.from(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE))
+    }
+
     var selectedWeather by remember { mutableStateOf(WeatherType.Sunny) }
-    var selectedTime by remember { mutableStateOf(TimeOfDay.Morning) }
+    var dynamicAtmosphereMode by remember { mutableStateOf<DynamicAtmosphereMode?>(DynamicAtmosphereMode.RealTime) }
+    var selectedTime by remember { mutableStateOf(resolveRealTime()) }
     var isHudExpanded by remember { mutableStateOf(true) }
 
     // Calibration overrides
@@ -338,6 +353,49 @@ fun WeatherShowcaseScreen(
                             .fillMaxWidth()
                             .padding(MistyDimensions.Space16),
                     ) {
+                        // Apple Weather Style Dynamic Atmosphere Mode
+                        Text(
+                            text = "环境动态模式 (Apple Weather Style)",
+                            style = MistyType.ForecastTime,
+                            color = MistyColors.TextOnGlassSecondary,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(Modifier.height(MistyDimensions.Space8))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(MistyDimensions.Space8),
+                        ) {
+                            DynamicAtmosphereMode.values().forEach { mode ->
+                                val isSelected = dynamicAtmosphereMode == mode
+                                Box(
+                                    modifier = Modifier
+                                        .clip(MistyShapes.Medium)
+                                        .background(if (isSelected) MistyColors.GlassWhite40 else MistyColors.GlassWhite15)
+                                        .clickable {
+                                            dynamicAtmosphereMode = mode
+                                            selectedTime = when (mode) {
+                                                DynamicAtmosphereMode.RealTime -> resolveRealTime()
+                                                DynamicAtmosphereMode.Morning  -> TimeOfDay.Morning
+                                                DynamicAtmosphereMode.Sunset   -> TimeOfDay.Sunset
+                                                DynamicAtmosphereMode.Night    -> TimeOfDay.Night
+                                            }
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                ) {
+                                    Text(
+                                        text = mode.label,
+                                        style = MistyType.ForecastTime,
+                                        color = if (isSelected) Color.White else MistyColors.TextOnGlassSecondary,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(MistyDimensions.Space12))
+
                         // Preset Pills
                         Text(
                             text = "设计稿签名预设 (1-Click Presets)",
@@ -359,6 +417,7 @@ fun WeatherShowcaseScreen(
                                         .clip(MistyShapes.Medium)
                                         .background(if (isSelected) MistyColors.GlassWhite40 else MistyColors.GlassWhite15)
                                         .clickable {
+                                            dynamicAtmosphereMode = null
                                             selectedWeather = preset.weather
                                             selectedTime = preset.time
                                         }
