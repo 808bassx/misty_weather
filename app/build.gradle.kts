@@ -90,4 +90,7 @@ dependencies {
   implementation("com.squareup.retrofit2:retrofit:2.11.0")
   implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
   implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+  // SVG parsing and rendering for Extensible Icon Pack System
+  implementation("com.caverock:androidsvg-aar:1.4")
 }

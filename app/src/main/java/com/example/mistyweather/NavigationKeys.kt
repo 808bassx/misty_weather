@@ -24,3 +24,7 @@ data object Settings : NavKey
 /** Visual calibration showcase screen (Phase 3.5). */
 @Serializable
 data object Showcase : NavKey
+
+/** Weather icon pack management screen (Phase 4.4-B0). */
+@Serializable
+data object IconPackSettings : NavKey

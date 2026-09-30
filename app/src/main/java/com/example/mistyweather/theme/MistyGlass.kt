@@ -57,6 +57,9 @@ enum class GlassLevel(
     /** Standard glass panel — forecast cards, detail rows. */
     Regular(fillAlpha = 0.25f, highlightAlpha = 0.12f, elevationDp = 4f),
 
+    /** Interactive / active state — selected cards, primary action buttons. */
+    Interactive(fillAlpha = 0.32f, highlightAlpha = 0.14f, elevationDp = 5f),
+
     /** More opaque — complex info areas needing readability. */
     Thick(fillAlpha = 0.38f, highlightAlpha = 0.15f, elevationDp = 6f),
 

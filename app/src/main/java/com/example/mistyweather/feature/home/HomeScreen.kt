@@ -65,6 +65,7 @@ import com.example.mistyweather.theme.MistyType
 import com.example.mistyweather.theme.MistyWeatherTheme
 import com.example.mistyweather.weather.atmosphere.TimeOfDay
 import com.example.mistyweather.weather.atmosphere.computeAmbientAtmosphere
+import com.example.mistyweather.weather.icon.ui.WeatherIcon
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -92,6 +93,7 @@ fun HomeScreen(
     viewModel: WeatherViewModel = viewModel(factory = WeatherViewModel.provideFactory()),
     timeOfDay: TimeOfDay? = null,
     onOpenShowcase: () -> Unit = {},
+    onOpenIconPacks: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val currentCity by viewModel.currentCity.collectAsStateWithLifecycle()
@@ -126,52 +128,56 @@ fun HomeScreen(
     when (val state = uiState) {
         WeatherUiState.Loading -> {
             HomeScreenContent(
-                weather        = PreviewWeatherTokyo,
-                forecast       = PreviewForecastSlots,
-                timeOfDay      = timeOfDay,
-                runtimeNotice  = locationNotice,
-                onOpenShowcase = onOpenShowcase,
-                onCityClick    = onCityClick,
-                modifier       = modifier,
+                weather         = PreviewWeatherTokyo,
+                forecast        = PreviewForecastSlots,
+                timeOfDay       = timeOfDay,
+                runtimeNotice   = locationNotice,
+                onOpenShowcase  = onOpenShowcase,
+                onOpenIconPacks = onOpenIconPacks,
+                onCityClick     = onCityClick,
+                modifier        = modifier,
             )
         }
         is WeatherUiState.Success -> {
             HomeScreenContent(
-                weather        = state.preview,
-                forecast       = state.forecastSlots,
-                renderState    = state.renderState,
-                timeOfDay      = timeOfDay ?: state.activeTimeOfDay,
-                runtimeNotice  = locationNotice,
-                onOpenShowcase = onOpenShowcase,
-                onCityClick    = onCityClick,
-                modifier       = modifier,
+                weather         = state.preview,
+                forecast        = state.forecastSlots,
+                renderState     = state.renderState,
+                timeOfDay       = timeOfDay ?: state.activeTimeOfDay,
+                runtimeNotice   = locationNotice,
+                onOpenShowcase  = onOpenShowcase,
+                onOpenIconPacks = onOpenIconPacks,
+                onCityClick     = onCityClick,
+                modifier        = modifier,
             )
         }
         is WeatherUiState.Refreshing -> {
             HomeScreenContent(
-                weather        = state.previous.preview,
-                forecast       = state.previous.forecastSlots,
-                renderState    = state.previous.renderState,
-                timeOfDay      = timeOfDay ?: state.previous.activeTimeOfDay,
-                runtimeNotice  = locationNotice ?: "正在同步天气数据...",
-                onRetryNotice  = null,
-                onOpenShowcase = onOpenShowcase,
-                onCityClick    = onCityClick,
-                modifier       = modifier,
+                weather         = state.previous.preview,
+                forecast        = state.previous.forecastSlots,
+                renderState     = state.previous.renderState,
+                timeOfDay       = timeOfDay ?: state.previous.activeTimeOfDay,
+                runtimeNotice   = locationNotice ?: "正在同步天气数据...",
+                onRetryNotice   = null,
+                onOpenShowcase  = onOpenShowcase,
+                onOpenIconPacks = onOpenIconPacks,
+                onCityClick     = onCityClick,
+                modifier        = modifier,
             )
         }
         is WeatherUiState.Error -> {
             val lastKnown = state.lastKnown
             HomeScreenContent(
-                weather        = lastKnown?.preview ?: PreviewWeatherTokyo,
-                forecast       = lastKnown?.forecastSlots ?: PreviewForecastSlots,
-                renderState    = lastKnown?.renderState,
-                timeOfDay      = timeOfDay ?: state.activeTimeOfDay,
-                runtimeNotice  = locationNotice ?: state.error.userFacingMessage,
-                onRetryNotice  = if (state.canRetry) { { viewModel.refreshWeather() } } else null,
-                onOpenShowcase = onOpenShowcase,
-                onCityClick    = onCityClick,
-                modifier       = modifier,
+                weather         = lastKnown?.preview ?: PreviewWeatherTokyo,
+                forecast        = lastKnown?.forecastSlots ?: PreviewForecastSlots,
+                renderState     = lastKnown?.renderState,
+                timeOfDay       = timeOfDay ?: state.activeTimeOfDay,
+                runtimeNotice   = locationNotice ?: state.error.userFacingMessage,
+                onRetryNotice   = if (state.canRetry) { { viewModel.refreshWeather() } } else null,
+                onOpenShowcase  = onOpenShowcase,
+                onOpenIconPacks = onOpenIconPacks,
+                onCityClick     = onCityClick,
+                modifier        = modifier,
             )
         }
     }
@@ -202,6 +208,7 @@ internal fun HomeScreenContent(
     runtimeNotice: String? = null,
     onRetryNotice: (() -> Unit)? = null,
     onOpenShowcase: () -> Unit = {},
+    onOpenIconPacks: () -> Unit = {},
     onCityClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -297,7 +304,8 @@ internal fun HomeScreenContent(
 
             // ── Layer 4: Floating Glass Navigation ────────────────────────────────
             FloatingGlassNavigation(
-                onOpenShowcase = onOpenShowcase,
+                onOpenShowcase  = onOpenShowcase,
+                onOpenIconPacks = onOpenIconPacks,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .windowInsetsPadding(WindowInsets.navigationBars)
@@ -510,8 +518,8 @@ private fun ForecastSlotItem(slot: ForecastSlot) {
 
         Spacer(Modifier.height(MistyDimensions.Space8))
 
-        // Weather type icon (drawn on Canvas — no emoji)
-        WeatherIconCanvas(
+        // Weather type icon (icon-pack-aware, geometric fallback)
+        WeatherIcon(
             weatherType = slot.weatherType,
             modifier    = Modifier.size(22.dp),
         )
@@ -641,6 +649,7 @@ private val navItems = listOf(
 @Composable
 private fun FloatingGlassNavigation(
     onOpenShowcase: () -> Unit = {},
+    onOpenIconPacks: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -665,8 +674,9 @@ private fun FloatingGlassNavigation(
                     selected = selectedIndex == item.index,
                     onClick  = {
                         selectedIndex = item.index
-                        if (item.index == 2) {
-                            onOpenShowcase()
+                        when (item.index) {
+                            1 -> onOpenShowcase()
+                            2 -> onOpenIconPacks()
                         }
                     },
                 )
@@ -691,10 +701,8 @@ private fun NavItemButton(
             .semantics {
                 contentDescription = item.label + if (selected) "，已选择" else ""
             }
-            // Use clickable in a real impl; pointer input kept minimal for Phase 1.
-            .then(
-                Modifier.padding(horizontal = MistyDimensions.Space8)
-            ),
+            .clickable(onClick = onClick)
+            .padding(horizontal = MistyDimensions.Space8),
     ) {
         // Nav icon drawn on canvas
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
