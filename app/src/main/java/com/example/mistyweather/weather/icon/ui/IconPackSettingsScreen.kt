@@ -113,9 +113,9 @@ fun IconPackSettingsScreen(
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF1E2638),
-                        Color(0xFF141A28),
-                        Color(0xFF0F1420),
+                        MistyColors.SecondaryBg,
+                        MistyColors.SecondaryBgMid,
+                        MistyColors.SecondaryBgDark,
                     ),
                 ),
             )
@@ -150,7 +150,7 @@ fun IconPackSettingsScreen(
 
                 Text(
                     text  = "天气图标管理",
-                    style = MistyType.SectionHeader.copy(fontSize = 20.sp),
+                    style = MistyType.ScreenTitle,
                     color = MistyColors.TextOnGlass,
                 )
             }
@@ -202,7 +202,7 @@ fun IconPackSettingsScreen(
                         Text(
                             text     = "选择 ZIP",
                             style    = MistyType.ForecastTime.copy(fontWeight = FontWeight.Bold),
-                            color    = Color(0xFF64B5F6),
+                            color    = MistyColors.AccentSky,
                             maxLines = 1,
                             softWrap = false,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
@@ -284,7 +284,7 @@ fun IconPackSettingsScreen(
                             scope.launch { manager.deletePack(idToDelete) }
                         },
                     ) {
-                        Text("确认删除", color = Color(0xFFE57373))
+                        Text("确认删除", color = MistyColors.StatusDanger)
                     }
                 },
                 dismissButton = {
@@ -292,7 +292,7 @@ fun IconPackSettingsScreen(
                         Text("取消", color = MistyColors.TextOnGlassSecondary)
                     }
                 },
-                containerColor = Color(0xFF1E2638),
+                containerColor = MistyColors.SecondaryBg,
             )
         }
 
@@ -300,14 +300,14 @@ fun IconPackSettingsScreen(
         importErrorMessage?.let { message ->
             AlertDialog(
                 onDismissRequest = { importErrorMessage = null },
-                title = { Text("无法导入图标包", color = Color(0xFFE57373)) },
+                title = { Text("无法导入图标包", color = MistyColors.StatusDanger) },
                 text  = { Text(message, color = MistyColors.TextOnGlassSecondary) },
                 confirmButton = {
                     TextButton(onClick = { importErrorMessage = null }) {
                         Text("知道了", color = MistyColors.TextOnGlass)
                     }
                 },
-                containerColor = Color(0xFF1E2638),
+                containerColor = MistyColors.SecondaryBg,
             )
         }
 
@@ -315,14 +315,14 @@ fun IconPackSettingsScreen(
         importSuccessMessage?.let { message ->
             AlertDialog(
                 onDismissRequest = { importSuccessMessage = null },
-                title = { Text("导入成功", color = Color(0xFF81C784)) },
+                title = { Text("导入成功", color = MistyColors.StatusSuccess) },
                 text  = { Text(message, color = MistyColors.TextOnGlassSecondary) },
                 confirmButton = {
                     TextButton(onClick = { importSuccessMessage = null }) {
                         Text("确定", color = MistyColors.TextOnGlass)
                     }
                 },
-                containerColor = Color(0xFF1E2638),
+                containerColor = MistyColors.SecondaryBg,
             )
         }
     }

@@ -67,12 +67,12 @@ fun CitySelectionDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f))
+                .background(MistyColors.ScrimDark)
                 .clickable(onClick = onDismiss),
             contentAlignment = Alignment.Center,
         ) {
             GlassSurface(
-                level    = GlassLevel.Regular,
+                level    = GlassLevel.Modal,
                 shape    = MistyShapes.Medium,
                 modifier = Modifier
                     .fillMaxWidth(0.9f)

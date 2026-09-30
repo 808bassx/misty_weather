@@ -77,7 +77,7 @@ fun IconPackCard(
                         Text(
                             text     = "✓ 当前使用",
                             style    = MistyType.ForecastTime.copy(fontWeight = FontWeight.Bold),
-                            color    = Color(0xFF81C784),
+                            color    = MistyColors.StatusSuccess,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         )
                     }
@@ -163,7 +163,7 @@ fun IconPackCard(
                         Text(
                             text     = "启用此包",
                             style    = MistyType.ForecastTime.copy(fontWeight = FontWeight.Bold),
-                            color    = Color(0xFF64B5F6),
+                            color    = MistyColors.AccentSky,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
                         )
                     }
@@ -180,7 +180,7 @@ fun IconPackCard(
                         Text(
                             text     = "删除",
                             style    = MistyType.ForecastTime,
-                            color    = Color(0xFFE57373),
+                            color    = MistyColors.StatusDanger,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         )
                     }

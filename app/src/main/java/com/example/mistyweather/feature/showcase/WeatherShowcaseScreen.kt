@@ -46,6 +46,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.mistyweather.core.weather.WeatherType
+import com.example.mistyweather.theme.DesignTokensShowcase
 import com.example.mistyweather.theme.GlassLevel
 import com.example.mistyweather.theme.GlassSurface
 import com.example.mistyweather.theme.LocalGlassAmbient
@@ -110,6 +111,21 @@ fun WeatherShowcaseScreen(
     var dynamicAtmosphereMode by remember { mutableStateOf<DynamicAtmosphereMode?>(DynamicAtmosphereMode.RealTime) }
     var selectedTime by remember { mutableStateOf(resolveRealTime()) }
     var isHudExpanded by remember { mutableStateOf(true) }
+    var isTokensTab by remember { mutableStateOf(false) }
+
+    if (isTokensTab) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(MistyColors.SecondaryBgDark)
+                .windowInsetsPadding(WindowInsets.statusBars),
+        ) {
+            DesignTokensShowcase(
+                onNavigateBack = { isTokensTab = false },
+            )
+        }
+        return
+    }
 
     // Calibration overrides
     var glassTintBoost by remember { mutableFloatStateOf(1.0f) }
@@ -173,20 +189,40 @@ fun WeatherShowcaseScreen(
                         fontWeight = FontWeight.SemiBold,
                     )
 
-                    // HUD Toggle Button
-                    Box(
-                        modifier = Modifier
-                            .clip(MistyShapes.Small)
-                            .background(if (isHudExpanded) MistyColors.GlassWhite30 else MistyColors.GlassWhite15)
-                            .clickable { isHudExpanded = !isHudExpanded }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = if (isHudExpanded) "收起调色板" else "打开调色板",
-                            style = MistyType.ForecastTime,
-                            color = Color.White,
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Tokens Showcase Toggle Button
+                        Box(
+                            modifier = Modifier
+                                .clip(MistyShapes.Small)
+                                .background(MistyColors.GlassWhite20)
+                                .clickable { isTokensTab = true }
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "🎨 Tokens",
+                                style = MistyType.ForecastTime,
+                                color = Color.White,
+                            )
+                        }
+
+                        Spacer(Modifier.width(8.dp))
+
+                        // HUD Toggle Button
+                        Box(
+                            modifier = Modifier
+                                .clip(MistyShapes.Small)
+                                .background(if (isHudExpanded) MistyColors.GlassWhite30 else MistyColors.GlassWhite15)
+                                .clickable { isHudExpanded = !isHudExpanded }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = if (isHudExpanded) "收起调色板" else "打开调色板",
+                                style = MistyType.ForecastTime,
+                                color = Color.White,
+                            )
+                        }
                     }
                 }
 

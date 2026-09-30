@@ -9,6 +9,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 
@@ -23,7 +24,7 @@ private val MistyLightColorScheme = lightColorScheme(
     onSurface        = MistyColors.LightOnSurface,
     surfaceVariant   = MistyColors.MistBlue,
     onSurfaceVariant = MistyColors.TextSecondary,
-    outline          = MistyColors.GlassBorder,
+    outline          = MistyColors.GlassBorderSubtle,
 )
 
 private val MistyDarkColorScheme = darkColorScheme(
@@ -35,33 +36,78 @@ private val MistyDarkColorScheme = darkColorScheme(
     onSurface        = MistyColors.DarkOnSurface,
     surfaceVariant   = MistyColors.IndigoGray,
     onSurfaceVariant = MistyColors.TextSecondaryDark,
-    outline          = MistyColors.GlassBorder,
+    outline          = MistyColors.GlassBorderSubtle,
 )
 
-// ─── Composition Local for dark-mode awareness in glass components ────────────
+// ─── Composition Locals for Design Tokens ─────────────────────────────────────
 
 internal val LocalMistyDarkTheme = staticCompositionLocalOf { false }
 
+val LocalMistyColors = staticCompositionLocalOf { MistyLightPalette }
+
 /** Returns true when the current Misty theme is in dark mode. */
 val isMistyDark: Boolean
-    @Composable get() = LocalMistyDarkTheme.current
+    @Composable
+    @ReadOnlyComposable
+    get() = LocalMistyDarkTheme.current
+
+// ─── Unified Semantic Token Accessors ─────────────────────────────────────────
+
+object MistyTheme {
+    val colors: MistyColorPalette
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalMistyColors.current
+
+    val typography: MistyType
+        get() = MistyType
+
+    val dimensions: MistyDimensions
+        get() = MistyDimensions
+
+    val shapes: MistyShapes
+        get() = MistyShapes
+
+    val motion: MistyMotion
+        get() = MistyMotion
+}
+
+object MistyTokens {
+    val colors: MistyColorPalette
+        @Composable
+        @ReadOnlyComposable
+        get() = MistyTheme.colors
+
+    val typography: MistyType
+        get() = MistyTheme.typography
+
+    val dimensions: MistyDimensions
+        get() = MistyTheme.dimensions
+
+    val shapes: MistyShapes
+        get() = MistyTheme.shapes
+
+    val motion: MistyMotion
+        get() = MistyTheme.motion
+}
 
 // ─── MistyWeatherTheme ────────────────────────────────────────────────────────
 
 /**
- * The single theme wrapper for the entire Misty Weather app.
+ * The single theme wrapper for the entire Misty Weather application.
  *
  * - Applies Misty's [MistyLightColorScheme] / [MistyDarkColorScheme].
  * - On Android 12+ (API 31+), falls back to dynamic color only when
  *   [dynamicColor] is true — but Misty's own palette is the default.
- * - Provides [LocalMistyDarkTheme] so glass surfaces can self-adapt.
+ * - Provides [LocalMistyDarkTheme], [LocalMistyColors], and [LocalMistyReduceMotion]
+ *   so all composables and glass surfaces self-adapt.
  * - Uses [MistyM3Typography] and [MistyM3Shapes] throughout.
  */
 @Composable
 fun MistyWeatherTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color disabled by default — Misty has its own intentional palette.
     dynamicColor: Boolean = false,
+    reduceMotion: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val colorScheme = when {
@@ -73,7 +119,13 @@ fun MistyWeatherTheme(
         else      -> MistyLightColorScheme
     }
 
-    CompositionLocalProvider(LocalMistyDarkTheme provides darkTheme) {
+    val palette = if (darkTheme) MistyDarkPalette else MistyLightPalette
+
+    CompositionLocalProvider(
+        LocalMistyDarkTheme provides darkTheme,
+        LocalMistyColors provides palette,
+        LocalMistyReduceMotion provides reduceMotion,
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography  = MistyM3Typography,
@@ -82,6 +134,3 @@ fun MistyWeatherTheme(
         )
     }
 }
-
-/** Convenience alias so call-sites can use either name. */
-typealias MistyTheme = Unit // structural alias — use MistyWeatherTheme { }

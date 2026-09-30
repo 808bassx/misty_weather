@@ -2,203 +2,283 @@ package com.example.mistyweather.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.example.mistyweather.R
 
-// ─── Misty Weather Typography ────────────────────────────────────────────────
-// Apple-like information hierarchy: Display → Headline → Title → Body → Label → Caption
-// Temperature Display: ~80sp Light with negative letter-spacing — airy, cinematic.
-// No ultra-bold weights. Light/Normal weights preferred for an airy aesthetic.
+// ─── Misty Weather Typography System ─────────────────────────────────────────
+//
+// Core Typeface: Plus Jakarta Sans (SIL Open Font License 1.1)
+// CJK Fallback: Android System CJK / Noto Sans SC (harmonized optical baseline)
+//
+// Design Principle: Airy, poetic, architectural numerals. Temperature Hero
+// uses negative letter tracking (-3sp) to prevent wide digit splay.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Extended Misty-specific text styles beyond the Material 3 scale. */
+val PlusJakartaSansFamily = FontFamily(
+    Font(R.font.plus_jakarta_sans_light, FontWeight.Light),
+    Font(R.font.plus_jakarta_sans_regular, FontWeight.Normal),
+    Font(R.font.plus_jakarta_sans_medium, FontWeight.Medium),
+    Font(R.font.plus_jakarta_sans_semibold, FontWeight.SemiBold),
+    Font(R.font.plus_jakarta_sans_bold, FontWeight.Bold),
+)
+
 object MistyType {
 
-    /** Primary temperature display: "23°" — large, light, cinematic. */
-    val TemperatureDisplay = TextStyle(
-        fontFamily    = FontFamily.Default,
+    // ── Numeric Typography (Temperature Scales - Design Hypothesis) ───────────
+
+    /** Primary hero temperature display: "24°" — airy, light, editorial. */
+    val TemperatureHero = TextStyle(
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Light,
         fontSize      = 84.sp,
         lineHeight    = 84.sp,
-        letterSpacing = (-2).sp,
+        letterSpacing = (-3).sp,
     )
 
-    /** Secondary temperature or large numeric value. */
+    /** Large secondary temperature or prominent metric. */
     val TemperatureLarge = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Light,
         fontSize      = 56.sp,
         lineHeight    = 60.sp,
+        letterSpacing = (-2).sp,
+    )
+
+    /** Compact temperature (e.g. min/max range, small card summaries). */
+    val TemperatureCompact = TextStyle(
+        fontFamily    = PlusJakartaSansFamily,
+        fontWeight    = FontWeight.Light,
+        fontSize      = 28.sp,
+        lineHeight    = 32.sp,
         letterSpacing = (-1).sp,
     )
 
-    /** City / Location name — prominent but not shouting. */
-    val LocationDisplay = TextStyle(
-        fontFamily    = FontFamily.Default,
-        fontWeight    = FontWeight.Normal,
-        fontSize      = 28.sp,
-        lineHeight    = 34.sp,
+    // Legacy alias to preserve backward compatibility with existing composables
+    val TemperatureDisplay = TemperatureHero
+
+    // ── Content Typography (Location, Weather Condition, Details) ─────────────
+
+    /** Primary location title: "东京", "Paris" — confident without shouting. */
+    val LocationPrimary = TextStyle(
+        fontFamily    = PlusJakartaSansFamily,
+        fontWeight    = FontWeight.Medium,
+        fontSize      = 22.sp,
+        lineHeight    = 28.sp,
         letterSpacing = (-0.3).sp,
     )
 
-    /** Weather condition: "多云", "Sunny" */
-    val ConditionLabel = TextStyle(
-        fontFamily    = FontFamily.Default,
+    /** Secondary location subtitle: "Current location", "日本" */
+    val LocationSecondary = TextStyle(
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Normal,
-        fontSize      = 18.sp,
+        fontSize      = 13.sp,
+        lineHeight    = 18.sp,
+        letterSpacing = 0.2.sp,
+    )
+
+    // Legacy alias
+    val LocationDisplay = LocationPrimary
+
+    /** Weather condition description: "晴空晚霞", "连绵细雨" */
+    val ConditionPrimary = TextStyle(
+        fontFamily    = PlusJakartaSansFamily,
+        fontWeight    = FontWeight.Normal,
+        fontSize      = 17.sp,
         lineHeight    = 24.sp,
         letterSpacing = 0.sp,
     )
 
-    /** Small detail text: "体感 22°", "湿度 71%" */
-    val DetailLabel = TextStyle(
-        fontFamily    = FontFamily.Default,
+    // Legacy alias
+    val ConditionLabel = ConditionPrimary
+
+    /** Inline metric row: "体感 22° · 湿度 71%" */
+    val DetailRow = TextStyle(
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Normal,
         fontSize      = 14.sp,
         lineHeight    = 20.sp,
-        letterSpacing = 0.2.sp,
+        letterSpacing = 0.15.sp,
     )
 
-    /** Forecast time label: "16:00", "现在" */
+    // Legacy alias
+    val DetailLabel = DetailRow
+
+    // ── Forecast & Temporal Typography ────────────────────────────────────────
+
+    /** Hourly forecast time label: "16:00", "现在" */
     val ForecastTime = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Normal,
-        fontSize      = 12.sp,
+        fontSize      = 11.sp,
         lineHeight    = 16.sp,
         letterSpacing = 0.1.sp,
     )
 
-    /** Forecast temperature: "23°" in small card */
+    /** Hourly forecast temperature: "23°" */
     val ForecastTemp = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Light,
-        fontSize      = 16.sp,
+        fontSize      = 15.sp,
         lineHeight    = 20.sp,
         letterSpacing = (-0.2).sp,
     )
 
-    /** Navigation label */
+    // ── Navigation & Section Headers ──────────────────────────────────────────
+
+    /** Section header in glass cards: "今天", "已安装图标包" */
+    val CardHeader = TextStyle(
+        fontFamily    = PlusJakartaSansFamily,
+        fontWeight    = FontWeight.SemiBold,
+        fontSize      = 12.sp,
+        lineHeight    = 16.sp,
+        letterSpacing = 0.8.sp,
+    )
+
+    // Legacy alias
+    val SectionHeader = CardHeader
+
+    /** Top bar screen title: "天气图标管理", "城市管理" */
+    val ScreenTitle = TextStyle(
+        fontFamily    = PlusJakartaSansFamily,
+        fontWeight    = FontWeight.SemiBold,
+        fontSize      = 18.sp,
+        lineHeight    = 24.sp,
+        letterSpacing = (-0.2).sp,
+    )
+
+    /** Button label on glass pills */
+    val ButtonLabel = TextStyle(
+        fontFamily    = PlusJakartaSansFamily,
+        fontWeight    = FontWeight.Medium,
+        fontSize      = 13.sp,
+        lineHeight    = 18.sp,
+        letterSpacing = 0.1.sp,
+    )
+
+    /** Floating navigation bar label: "天气", "地点", "设置" */
     val NavLabel = TextStyle(
-        fontFamily    = FontFamily.Default,
-        fontWeight    = FontWeight.Normal,
+        fontFamily    = PlusJakartaSansFamily,
+        fontWeight    = FontWeight.Medium,
         fontSize      = 11.sp,
         lineHeight    = 14.sp,
         letterSpacing = 0.3.sp,
     )
 
-    /** Section header in glass cards */
-    val SectionHeader = TextStyle(
-        fontFamily    = FontFamily.Default,
-        fontWeight    = FontWeight.Medium,
-        fontSize      = 13.sp,
-        lineHeight    = 18.sp,
-        letterSpacing = 0.4.sp,
+    /** Micro captions, metadata timestamps, license text */
+    val CaptionMicro = TextStyle(
+        fontFamily    = PlusJakartaSansFamily,
+        fontWeight    = FontWeight.Normal,
+        fontSize      = 10.sp,
+        lineHeight    = 14.sp,
+        letterSpacing = 0.2.sp,
     )
 }
 
-/** Material 3 Typography using Misty's scale. */
+/** Material 3 Typography harmonized with Plus Jakarta Sans scale. */
 val MistyM3Typography = Typography(
     displayLarge = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Light,
         fontSize      = 57.sp,
         lineHeight    = 64.sp,
         letterSpacing = (-0.25).sp,
     ),
     displayMedium = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Light,
         fontSize      = 45.sp,
         lineHeight    = 52.sp,
         letterSpacing = 0.sp,
     ),
     displaySmall = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Normal,
         fontSize      = 36.sp,
         lineHeight    = 44.sp,
         letterSpacing = 0.sp,
     ),
     headlineLarge = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Normal,
         fontSize      = 32.sp,
         lineHeight    = 40.sp,
         letterSpacing = (-0.3).sp,
     ),
     headlineMedium = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Normal,
         fontSize      = 28.sp,
         lineHeight    = 36.sp,
         letterSpacing = (-0.2).sp,
     ),
     headlineSmall = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Normal,
         fontSize      = 24.sp,
         lineHeight    = 32.sp,
         letterSpacing = 0.sp,
     ),
     titleLarge = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Normal,
         fontSize      = 22.sp,
         lineHeight    = 28.sp,
         letterSpacing = 0.sp,
     ),
     titleMedium = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Medium,
         fontSize      = 16.sp,
         lineHeight    = 24.sp,
         letterSpacing = 0.1.sp,
     ),
     titleSmall = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Medium,
         fontSize      = 14.sp,
         lineHeight    = 20.sp,
         letterSpacing = 0.1.sp,
     ),
     bodyLarge = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Normal,
         fontSize      = 16.sp,
         lineHeight    = 24.sp,
         letterSpacing = 0.5.sp,
     ),
     bodyMedium = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Normal,
         fontSize      = 14.sp,
         lineHeight    = 20.sp,
         letterSpacing = 0.25.sp,
     ),
     bodySmall = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Normal,
         fontSize      = 12.sp,
         lineHeight    = 16.sp,
         letterSpacing = 0.4.sp,
     ),
     labelLarge = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Medium,
         fontSize      = 14.sp,
         lineHeight    = 20.sp,
         letterSpacing = 0.1.sp,
     ),
     labelMedium = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Medium,
         fontSize      = 12.sp,
         lineHeight    = 16.sp,
         letterSpacing = 0.5.sp,
     ),
     labelSmall = TextStyle(
-        fontFamily    = FontFamily.Default,
+        fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Medium,
         fontSize      = 11.sp,
         lineHeight    = 16.sp,
@@ -206,5 +286,5 @@ val MistyM3Typography = Typography(
     ),
 )
 
-// Keep legacy alias so existing template code compiles unmodified.
+// Legacy alias so existing code compiles unmodified.
 val Typography = MistyM3Typography
