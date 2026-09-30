@@ -17,9 +17,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -66,8 +68,6 @@ import com.example.mistyweather.theme.MistyWeatherTheme
 import com.example.mistyweather.weather.atmosphere.TimeOfDay
 import com.example.mistyweather.weather.atmosphere.computeAmbientAtmosphere
 import com.example.mistyweather.weather.icon.ui.WeatherIcon
-import kotlin.math.cos
-import kotlin.math.sin
 
 // ─── Home Screen ─────────────────────────────────────────────────────────────
 //
@@ -238,65 +238,26 @@ internal fun HomeScreenContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
+                    .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(
-                        top        = MistyDimensions.Space48,
-                        start      = MistyDimensions.Space16,
-                        end        = MistyDimensions.Space16,
+                        top        = MistyDimensions.Space16,
+                        start      = MistyDimensions.ScreenHorizontalPadding,
+                        end        = MistyDimensions.ScreenHorizontalPadding,
                         // Extra bottom padding so content clears the floating nav.
-                        bottom     = MistyDimensions.Space48 + MistyDimensions.NavBarHeight +
+                        bottom     = MistyDimensions.BottomSafeArea + MistyDimensions.NavBarHeight +
                                      MistyDimensions.NavBarBottomInset,
                     ),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // Location header with city switcher dropdown
-                LocationHeader(
-                    city        = weather.city,
-                    cityLatin   = weather.cityLatin,
-                    onCityClick = onCityClick,
+                // Phase D: Atmospheric Zero-Container Home Hero
+                HomeHero(
+                    weather         = weather,
+                    runtimeNotice   = runtimeNotice,
+                    onRetryNotice   = onRetryNotice,
+                    onCityClick     = onCityClick,
                 )
 
-                // Runtime offline / error notification pill
-                if (runtimeNotice != null) {
-                    Spacer(Modifier.height(MistyDimensions.Space12))
-                    GlassSurface(
-                        level    = GlassLevel.Thin,
-                        shape    = MistyShapes.Pill,
-                        modifier = Modifier
-                            .wrapContentHeight()
-                            .clickable(enabled = onRetryNotice != null) { onRetryNotice?.invoke() },
-                    ) {
-                        Row(
-                            modifier              = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                            verticalAlignment     = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                        ) {
-                            Text(
-                                text      = "⚡ $runtimeNotice" + if (onRetryNotice != null) " · 点击重试" else "",
-                                style     = MistyType.ForecastTime,
-                                color     = MistyColors.TextOnGlassSecondary,
-                                textAlign = TextAlign.Center,
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(MistyDimensions.Space48))
-
-                // Primary temperature display
-                TemperatureDisplay(
-                    temperature = weather.temperature,
-                    condition   = weather.condition,
-                )
-
-                Spacer(Modifier.height(MistyDimensions.Space20))
-
-                // Secondary detail row
-                WeatherDetailsRow(
-                    feelsLike = weather.feelsLike,
-                    humidity  = weather.humidity,
-                )
-
-                Spacer(Modifier.height(MistyDimensions.Space40))
+                Spacer(Modifier.height(MistyDimensions.HeroSpacing))
 
                 // Hourly forecast glass card
                 ForecastGlassCard(slots = forecast)
@@ -333,117 +294,6 @@ private fun AmbientBottomWash() {
                 startY = 0f,
                 endY   = size.height,
             ),
-        )
-    }
-}
-
-// ─── Location Header ──────────────────────────────────────────────────────────
-
-@Composable
-private fun LocationHeader(
-    city: String,
-    cityLatin: String,
-    onCityClick: (() -> Unit)? = null,
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.semantics(mergeDescendants = true) {
-            contentDescription = "$city ($cityLatin)"
-        },
-    ) {
-        Row(
-            verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier              = if (onCityClick != null) {
-                Modifier.clickable(onClick = onCityClick)
-            } else {
-                Modifier
-            },
-        ) {
-            Text(
-                text      = city,
-                style     = MistyType.LocationDisplay,
-                color     = MistyColors.TextOnGlass,
-                textAlign = TextAlign.Center,
-            )
-            if (onCityClick != null) {
-                Spacer(Modifier.width(MistyDimensions.Space8))
-                Text(
-                    text  = "▼",
-                    style = MistyType.ForecastTime,
-                    color = MistyColors.TextOnGlassSecondary,
-                )
-            }
-        }
-        Spacer(Modifier.height(MistyDimensions.Space4))
-        Text(
-            text      = cityLatin,
-            style     = MistyType.DetailLabel,
-            color     = MistyColors.TextOnGlassSecondary,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
-// ─── Temperature Display ──────────────────────────────────────────────────────
-
-@Composable
-private fun TemperatureDisplay(
-    temperature: Int,
-    condition: String,
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.semantics(mergeDescendants = true) {
-            contentDescription = "当前温度 $temperature 度，$condition"
-        },
-    ) {
-        // Large temperature — 84sp Light, cinematic
-        Text(
-            text      = "$temperature°",
-            style     = MistyType.TemperatureDisplay,
-            color     = MistyColors.TextOnGlass,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(MistyDimensions.Space8))
-        Text(
-            text      = condition,
-            style     = MistyType.ConditionLabel,
-            color     = MistyColors.TextOnGlassSecondary,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
-// ─── Weather Details Row ──────────────────────────────────────────────────────
-
-@Composable
-private fun WeatherDetailsRow(feelsLike: Int, humidity: Int) {
-    Row(
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment     = Alignment.CenterVertically,
-        modifier = Modifier.semantics(mergeDescendants = true) {
-            contentDescription = "体感温度 $feelsLike 度，湿度 $humidity%"
-        },
-    ) {
-        Text(
-            text  = "体感 $feelsLike°",
-            style = MistyType.DetailLabel,
-            color = MistyColors.TextOnGlassSecondary,
-        )
-        Spacer(Modifier.width(MistyDimensions.Space16))
-        // Dot divider
-        Canvas(modifier = Modifier.size(4.dp)) {
-            drawCircle(
-                color  = MistyColors.TextOnGlassTertiary,
-                radius = 2.dp.toPx(),
-            )
-        }
-        Spacer(Modifier.width(MistyDimensions.Space16))
-        Text(
-            text  = "湿度 $humidity%",
-            style = MistyType.DetailLabel,
-            color = MistyColors.TextOnGlassSecondary,
         )
     }
 }
@@ -487,8 +337,10 @@ private fun ForecastGlassCard(slots: List<ForecastSlot>) {
 
             // Hourly slots
             Row(
-                modifier              = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                modifier              = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(MistyDimensions.Space8),
             ) {
                 slots.forEach { slot ->
                     ForecastSlotItem(slot = slot)
@@ -521,7 +373,7 @@ private fun ForecastSlotItem(slot: ForecastSlot) {
         // Weather type icon (icon-pack-aware, geometric fallback)
         WeatherIcon(
             weatherType = slot.weatherType,
-            modifier    = Modifier.size(22.dp),
+            modifier    = Modifier.size(MistyDimensions.WeatherIconForecast),
         )
 
         Spacer(Modifier.height(MistyDimensions.Space8))
@@ -533,103 +385,6 @@ private fun ForecastSlotItem(slot: ForecastSlot) {
             color     = MistyColors.TextOnGlass,
             textAlign = TextAlign.Center,
         )
-    }
-}
-
-/**
- * Minimal canvas-drawn weather icon — geometric, not emoji, not illustration.
- * Sun = circle. Cloud = overlapping ellipses. Rain = circle + diagonal lines.
- */
-@Composable
-private fun WeatherIconCanvas(
-    weatherType: WeatherType,
-    modifier: Modifier = Modifier,
-) {
-    val iconColor = MistyColors.TextOnGlass
-
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val cx = w / 2f
-        val cy = h / 2f
-
-        when (weatherType) {
-            WeatherType.Sunny -> {
-                // Circle sun
-                drawCircle(color = iconColor.copy(alpha = 0.90f), radius = w * 0.26f)
-                // 8 short rays
-                for (i in 0 until 8) {
-                    val angle    = Math.toRadians(i * 45.0)
-                    val innerR   = w * 0.32f
-                    val outerR   = w * 0.46f
-                    val sinA     = sin(angle).toFloat()
-                    val cosA     = cos(angle).toFloat()
-                    drawLine(
-                        color       = iconColor.copy(alpha = 0.75f),
-                        start       = Offset(cx + cosA * innerR, cy + sinA * innerR),
-                        end         = Offset(cx + cosA * outerR, cy + sinA * outerR),
-                        strokeWidth = 1.5f,
-                        cap         = StrokeCap.Round,
-                    )
-                }
-            }
-            WeatherType.PartlyCloudy -> {
-                // Small sun upper-right
-                drawCircle(
-                    color  = iconColor.copy(alpha = 0.80f),
-                    radius = w * 0.18f,
-                    center = Offset(cx + w * 0.18f, cy - h * 0.18f),
-                )
-                // Cloud shape — two overlapping ellipses
-                drawOval(color = iconColor, topLeft = Offset(w * 0.05f, h * 0.42f),
-                    size = Size(w * 0.55f, h * 0.36f))
-                drawOval(color = iconColor, topLeft = Offset(w * 0.28f, h * 0.30f),
-                    size = Size(w * 0.44f, h * 0.36f))
-                drawOval(color = iconColor, topLeft = Offset(w * 0.00f, h * 0.54f),
-                    size = Size(w * 1.00f, h * 0.26f))
-            }
-            WeatherType.Cloudy -> {
-                // Cloud shape — overlapping ellipses
-                drawOval(color = iconColor, topLeft = Offset(w * 0.04f, h * 0.38f),
-                    size = Size(w * 0.58f, h * 0.38f))
-                drawOval(color = iconColor, topLeft = Offset(w * 0.26f, h * 0.24f),
-                    size = Size(w * 0.48f, h * 0.38f))
-                drawOval(color = iconColor, topLeft = Offset(w * 0.00f, h * 0.52f),
-                    size = Size(w * 1.00f, h * 0.28f))
-            }
-            WeatherType.Rain,
-            WeatherType.Storm -> {
-                // Cloud top
-                drawOval(color = iconColor.copy(alpha = 0.85f),
-                    topLeft = Offset(w * 0.04f, h * 0.10f),
-                    size = Size(w * 0.58f, h * 0.34f))
-                drawOval(color = iconColor.copy(alpha = 0.85f),
-                    topLeft = Offset(w * 0.26f, h * 0.04f),
-                    size = Size(w * 0.44f, h * 0.30f))
-                drawOval(color = iconColor.copy(alpha = 0.85f),
-                    topLeft = Offset(w * 0.00f, h * 0.22f),
-                    size = Size(w * 1.00f, h * 0.24f))
-                // Rain drops — three short diagonal lines
-                val dropAlpha = 0.75f
-                val dropCap   = StrokeCap.Round
-                val dx = w * 0.06f
-                val dy = h * 0.15f
-                for (d in 0 until 4) {
-                    val sx = w * 0.18f + d * w * 0.20f
-                    val sy = h * 0.56f
-                    drawLine(
-                        color = iconColor.copy(alpha = dropAlpha),
-                        start = Offset(sx,      sy),
-                        end   = Offset(sx + dx, sy + dy),
-                        strokeWidth = 1.5f, cap = dropCap,
-                    )
-                }
-            }
-            else -> {
-                // Fallback: simple circle
-                drawCircle(color = iconColor.copy(alpha = 0.50f), radius = w * 0.30f)
-            }
-        }
     }
 }
 
