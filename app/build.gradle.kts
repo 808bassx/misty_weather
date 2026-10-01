@@ -5,10 +5,10 @@ plugins {
 }
 
 android {
-    namespace = "com.example.mistyweather"
+    namespace = "com.misty.weather"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.example.mistyweather"
+        applicationId = "com.misty.weather"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
