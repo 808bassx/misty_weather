@@ -1,5 +1,8 @@
 package com.example.mistyweather.weather.icon.ui
 
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -11,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.mistyweather.core.weather.WeatherType
@@ -60,10 +64,21 @@ fun WeatherIcon(
             val scaleX = size.width / picture.width.toFloat()
             val scaleY = size.height / picture.height.toFloat()
             drawIntoCanvas { canvas ->
-                canvas.nativeCanvas.save()
-                canvas.nativeCanvas.scale(scaleX, scaleY)
-                canvas.nativeCanvas.drawPicture(picture)
-                canvas.nativeCanvas.restore()
+                val isBuiltIn = activePack.id == BuiltInIconPack.DEFAULT_PACK_ID
+                if (isBuiltIn) {
+                    val paint = Paint().apply {
+                        colorFilter = PorterDuffColorFilter(tint.toArgb(), PorterDuff.Mode.SRC_IN)
+                    }
+                    canvas.nativeCanvas.saveLayer(null, paint)
+                    canvas.nativeCanvas.scale(scaleX, scaleY)
+                    canvas.nativeCanvas.drawPicture(picture)
+                    canvas.nativeCanvas.restore()
+                } else {
+                    canvas.nativeCanvas.save()
+                    canvas.nativeCanvas.scale(scaleX, scaleY)
+                    canvas.nativeCanvas.drawPicture(picture)
+                    canvas.nativeCanvas.restore()
+                }
             }
         } else {
             // Three-tier guaranteed geometric fallback

@@ -23,9 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -36,16 +34,16 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.mistyweather.core.weather.WeatherPreview
+import com.example.mistyweather.core.weather.WeatherType
 import com.example.mistyweather.theme.GlassLevel
 import com.example.mistyweather.theme.GlassSurface
-import com.example.mistyweather.theme.LocalGlassAmbient
 import com.example.mistyweather.theme.LocalMistyReduceMotion
 import com.example.mistyweather.theme.MistyColors
 import com.example.mistyweather.theme.MistyDimensions
 import com.example.mistyweather.theme.MistyMotion
 import com.example.mistyweather.theme.MistyShapes
 import com.example.mistyweather.theme.MistyType
-import com.example.mistyweather.weather.icon.ui.WeatherIcon
+import com.example.mistyweather.weather.atmosphere.TimeOfDay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -66,6 +64,73 @@ object HomeHeroFormatters {
         }
     }
 
+    /** Formats wide-tracked Latin city title for atmospheric presence. */
+    fun formatLocationTitleWide(cityLatin: String, city: String): String {
+        val trimmedLatin = cityLatin.trim()
+        if (trimmedLatin.isNotEmpty() &&
+            !trimmedLatin.equals("Current_location", ignoreCase = true) &&
+            !trimmedLatin.equals("current location", ignoreCase = true)
+        ) {
+            val primaryLatin = trimmedLatin.split(",").first().trim()
+            return primaryLatin.uppercase()
+        }
+        val trimmedCity = city.trim()
+        return if (trimmedCity.isNotEmpty()) trimmedCity.uppercase() else "MISTY"
+    }
+
+    /** Formats poetic / literary weather phrase keyed to condition, time, and temperature. */
+    fun formatLiteraryPhrase(
+        condition: String,
+        weatherType: WeatherType,
+        timeOfDay: TimeOfDay? = null,
+    ): String {
+        val isNight = timeOfDay == TimeOfDay.Night || timeOfDay == TimeOfDay.Evening
+        val isDawnOrMorning = timeOfDay == TimeOfDay.Dawn || timeOfDay == TimeOfDay.Morning
+        val isSunset = timeOfDay == TimeOfDay.Sunset
+
+        return when (weatherType) {
+            WeatherType.Sunny -> when {
+                isNight -> "星汉静谧 · 夜色澄澈"
+                isDawnOrMorning -> "晨光清澈 · 空气微冽"
+                isSunset -> "晚霞微醺 · 残照温软"
+                else -> "明媚日光 · 万物朗阔"
+            }
+            WeatherType.PartlyCloudy, WeatherType.Cloudy -> when {
+                isNight -> "云翳隐星 · 晚风徐徐"
+                isDawnOrMorning -> "晨岚渐聚 · 云影漫卷"
+                else -> "层云微遮 · 天光温润"
+            }
+            WeatherType.Rain -> when {
+                isNight -> "夜雨淅沥 · 窗凝水汽"
+                isDawnOrMorning -> "清晨带露 · 细雨初歇"
+                else -> "暮雨轻敲 · 水汽氤氲"
+            }
+            WeatherType.Storm -> "雷声隐隐 · 骤雨倾盆"
+            WeatherType.Snow -> "素雪纷扬 · 银粟初落"
+            WeatherType.Fog -> "晓雾弥蒙 · 远黛空濛"
+        }
+    }
+
+    /**
+     * Resolves atmospheric temperature tint color, preventing harsh pure white #FFFFFF
+     * and harmonizing with diurnal lighting.
+     */
+    fun getAtmosphericTemperatureColor(
+        weatherType: WeatherType,
+        timeOfDay: TimeOfDay? = null,
+    ): Color {
+        val isNight = timeOfDay == TimeOfDay.Night || timeOfDay == TimeOfDay.Evening
+        if (isNight) {
+            return Color(0xFFDCE1FF).copy(alpha = 0.90f) // Lunar Cool
+        }
+        return when (weatherType) {
+            WeatherType.Sunny -> Color(0xFFFFF8DC).copy(alpha = 0.95f) // Warm Ivory
+            WeatherType.Rain, WeatherType.Storm -> Color(0xFFDCF0FF).copy(alpha = 0.92f) // Misty Cool
+            WeatherType.Cloudy, WeatherType.PartlyCloudy, WeatherType.Fog -> Color(0xFFE8EEF5).copy(alpha = 0.92f) // Soft Silver
+            WeatherType.Snow -> Color(0xFFF0F9FF).copy(alpha = 0.95f) // Frosty Ice White
+        }
+    }
+
     /** Formats numeric temperature with degree symbol. */
     fun formatTemperature(temperature: Int): String = "$temperature°"
 
@@ -76,11 +141,12 @@ object HomeHeroFormatters {
 // ─── Home Hero Composable ─────────────────────────────────────────────────────
 
 /**
- * Phase D: Home / Hero Atmospheric Stage.
+ * Phase F: Atmospheric Weather Canvas Hero Stage.
  *
- * Implements "Weather is the Atmosphere, not a Collection of Cards".
+ * Implements "Not a Dashboard, but a Window".
  * Zero container overhead: elements sit directly against the dynamic celestial canvas.
- * Integrates 72dp WeatherIcon, 84sp TemperatureHero, and calm inertial motion choreography.
+ * Integrates 80dp WeatherOrb, 68sp AtmosphericTemperature, wide-tracked location title,
+ * and literary weather phrases.
  */
 @Composable
 fun HomeHero(
@@ -102,7 +168,7 @@ fun HomeHero(
     val metricsAlpha = remember { Animatable(if (isReducedMotion) 1f else 0f) }
     val metricsOffsetY = remember { Animatable(if (isReducedMotion) 0f else 12f) }
 
-    LaunchedEffect(weather.city, weather.temperature, weather.weatherType, isReducedMotion) {
+    LaunchedEffect(weather.city, weather.temperature, weather.weatherType, weather.timeOfDay, isReducedMotion) {
         if (isReducedMotion) {
             locationAlpha.snapTo(1f)
             locationOffsetY.snapTo(0f)
@@ -159,7 +225,7 @@ fun HomeHero(
             },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // ── 1. Location Header ───────────────────────────────────────────────
+        // ── 1. Location Header & Literary Phrase ─────────────────────────────
         Box(
             modifier = Modifier.graphicsLayer {
                 alpha = locationAlpha.value
@@ -170,22 +236,25 @@ fun HomeHero(
             HomeLocationHeader(
                 city = weather.city,
                 cityLatin = weather.cityLatin,
+                condition = weather.condition,
+                weatherType = weather.weatherType,
+                timeOfDay = weather.timeOfDay,
                 onCityClick = onCityClick,
             )
         }
 
         // ── 2. Runtime Notice Pill (if present) ──────────────────────────────
         if (runtimeNotice != null) {
-            Spacer(Modifier.height(MistyDimensions.Space12))
+            Spacer(Modifier.height(MistyDimensions.Space10))
             HomeRuntimeNoticePill(
                 notice = runtimeNotice,
                 onRetry = onRetryNotice,
             )
         }
 
-        Spacer(Modifier.height(MistyDimensions.Space32))
+        Spacer(Modifier.height(MistyDimensions.Space24))
 
-        // ── 3. Hero Weather Presence (Icon + Temperature) ────────────────────
+        // ── 3. Hero Celestial Presence (WeatherOrb + Atmospheric Temperature) ─
         Box(
             modifier = Modifier.graphicsLayer {
                 alpha = weatherAlpha.value
@@ -198,7 +267,7 @@ fun HomeHero(
             )
         }
 
-        Spacer(Modifier.height(MistyDimensions.Space6))
+        Spacer(Modifier.height(MistyDimensions.Space10))
 
         // ── 4. Condition & Glanceable Metrics ────────────────────────────────
         Box(
@@ -223,13 +292,19 @@ fun HomeHero(
 private fun HomeLocationHeader(
     city: String,
     cityLatin: String,
+    condition: String,
+    weatherType: WeatherType,
+    timeOfDay: TimeOfDay?,
     onCityClick: (() -> Unit)?,
 ) {
-    val formattedSubtitle = HomeHeroFormatters.formatLocationSubtitle(cityLatin)
+    val wideTitle = HomeHeroFormatters.formatLocationTitleWide(cityLatin, city)
+    val subtitle = HomeHeroFormatters.formatLocationSubtitle(cityLatin)
+    val literaryPhrase = HomeHeroFormatters.formatLiteraryPhrase(condition, weatherType, timeOfDay)
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // Primary Latin Wide-Tracked Title (e.g. "T O K Y O")
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
@@ -244,21 +319,20 @@ private fun HomeLocationHeader(
                         role = Role.Button
                         contentDescription = "选择城市，当前城市 $city"
                     }
-                    .padding(horizontal = MistyDimensions.Space8, vertical = MistyDimensions.Space4)
+                    .padding(horizontal = MistyDimensions.Space8, vertical = MistyDimensions.Space2)
             } else {
-                Modifier.padding(horizontal = MistyDimensions.Space8, vertical = MistyDimensions.Space4)
+                Modifier.padding(horizontal = MistyDimensions.Space8, vertical = MistyDimensions.Space2)
             },
         ) {
             Text(
-                text = city,
-                style = MistyType.LocationPrimary,
+                text = wideTitle,
+                style = MistyType.LocationTitleWide,
                 color = MistyColors.TextOnGlass,
                 textAlign = TextAlign.Center,
             )
 
             if (onCityClick != null) {
                 Spacer(Modifier.width(MistyDimensions.Space6))
-                // Minimalist geometric dropdown chevron
                 Canvas(modifier = Modifier.size(10.dp)) {
                     val w = size.width
                     val h = size.height
@@ -266,29 +340,41 @@ private fun HomeLocationHeader(
                         color = MistyColors.TextOnGlassSecondary,
                         start = Offset(0f, h * 0.35f),
                         end = Offset(w * 0.5f, h * 0.75f),
-                        strokeWidth = 1.8f.dp.toPx(),
+                        strokeWidth = 1.6f.dp.toPx(),
                         cap = StrokeCap.Round,
                     )
                     drawLine(
                         color = MistyColors.TextOnGlassSecondary,
                         start = Offset(w * 0.5f, h * 0.75f),
                         end = Offset(w, h * 0.35f),
-                        strokeWidth = 1.8f.dp.toPx(),
+                        strokeWidth = 1.6f.dp.toPx(),
                         cap = StrokeCap.Round,
                     )
                 }
             }
         }
 
-        if (formattedSubtitle.isNotEmpty()) {
-            Spacer(Modifier.height(MistyDimensions.Space2))
-            Text(
-                text = formattedSubtitle,
-                style = MistyType.LocationSecondary,
-                color = MistyColors.TextOnGlassSecondary,
-                textAlign = TextAlign.Center,
-            )
+        // Secondary: Chinese localized label (e.g. "东京" or "GPS 定位 · 东京")
+        val secondaryLabel = when {
+            subtitle.isNotEmpty() && subtitle != city && !subtitle.contains(city, ignoreCase = true) -> "$city · $subtitle"
+            else -> city
         }
+        Text(
+            text = secondaryLabel,
+            style = MistyType.LocationSecondary,
+            color = MistyColors.TextOnGlassSecondary.copy(alpha = 0.90f),
+            textAlign = TextAlign.Center,
+        )
+
+        Spacer(Modifier.height(MistyDimensions.Space4))
+
+        // Tertiary: Literary weather phrase (e.g. "晨光清澈 · 空气微冽")
+        Text(
+            text = literaryPhrase,
+            style = MistyType.LiteraryPhrase,
+            color = MistyColors.TextOnGlassSecondary.copy(alpha = 0.75f),
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -323,43 +409,25 @@ private fun HomeRuntimeNoticePill(
 private fun HomeHeroWeatherPresence(
     weather: WeatherPreview,
 ) {
-    val ambientColor = LocalGlassAmbient.current
+    val tempColor = HomeHeroFormatters.getAtmosphericTemperatureColor(weather.weatherType, weather.timeOfDay)
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Hero Weather Icon (72dp) with subtle ambient glow
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(MistyDimensions.WeatherIconHero + MistyDimensions.Space16)
-                .drawBehind {
-                    // Soft ambient aura harmonizing with the diurnal sky
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                ambientColor.copy(alpha = 0.22f),
-                                Color.Transparent,
-                            ),
-                            radius = size.width * 0.55f,
-                            center = center,
-                        ),
-                    )
-                },
-        ) {
-            WeatherIcon(
-                weatherType = weather.weatherType,
-                modifier = Modifier.size(MistyDimensions.WeatherIconHero),
-            )
-        }
+        // Hero Weather Orb (80dp) with celestial aura and volumetric depth
+        WeatherOrb(
+            weatherType = weather.weatherType,
+            timeOfDay   = weather.timeOfDay,
+            size        = MistyDimensions.WeatherOrbSize,
+        )
 
-        Spacer(Modifier.height(MistyDimensions.Space4))
+        Spacer(Modifier.height(MistyDimensions.Space8))
 
-        // Hero Temperature Display (84sp Light Plus Jakarta Sans)
+        // Hero Temperature Display (68sp Light Plus Jakarta Sans with atmospheric tint)
         Text(
             text = HomeHeroFormatters.formatTemperature(weather.temperature),
             style = MistyType.TemperatureHero,
-            color = MistyColors.TextOnGlass,
+            color = tempColor,
             textAlign = TextAlign.Center,
         )
     }
@@ -374,7 +442,7 @@ private fun HomeConditionAndMetrics(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Literary weather condition phrase (e.g. "毛毛细雨", "晴空万里")
+        // Condition summary badge
         Text(
             text = condition,
             style = MistyType.ConditionPrimary,
@@ -382,7 +450,7 @@ private fun HomeConditionAndMetrics(
             textAlign = TextAlign.Center,
         )
 
-        Spacer(Modifier.height(MistyDimensions.Space12))
+        Spacer(Modifier.height(MistyDimensions.Space8))
 
         // Glanceable metric band (minimal dot-separated inline row)
         Row(
@@ -395,7 +463,7 @@ private fun HomeConditionAndMetrics(
                 color = MistyColors.TextOnGlassSecondary,
             )
 
-            Spacer(Modifier.width(MistyDimensions.Space12))
+            Spacer(Modifier.width(MistyDimensions.Space10))
 
             Canvas(modifier = Modifier.size(3.dp)) {
                 drawCircle(
@@ -404,7 +472,7 @@ private fun HomeConditionAndMetrics(
                 )
             }
 
-            Spacer(Modifier.width(MistyDimensions.Space12))
+            Spacer(Modifier.width(MistyDimensions.Space10))
 
             Text(
                 text = "湿度 $humidity%",

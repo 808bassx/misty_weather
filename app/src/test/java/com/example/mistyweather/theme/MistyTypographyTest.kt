@@ -22,8 +22,8 @@ class MistyTypographyTest {
         assertTrue("Hero > Large", hero.fontSize.value > large.fontSize.value)
         assertTrue("Large > Compact", large.fontSize.value > compact.fontSize.value)
 
-        // Hypotheses: Hero is 84sp Light, Large is 56sp Light, Compact is 28sp Light
-        assertEquals(84.sp, hero.fontSize)
+        // Hypotheses: Hero is 68sp Light (Phase F), Large is 56sp Light, Compact is 28sp Light
+        assertEquals(68.sp, hero.fontSize)
         assertEquals(56.sp, large.fontSize)
         assertEquals(28.sp, compact.fontSize)
 
@@ -31,16 +31,18 @@ class MistyTypographyTest {
         assertEquals(FontWeight.Light, large.fontWeight)
         assertEquals(FontWeight.Light, compact.fontWeight)
 
-        // Letter tracking: Hero must have negative letter spacing (-3sp) to avoid digit splay
+        // Letter tracking: Hero must have negative letter spacing (-2.5sp) to avoid digit splay
         assertTrue("Hero has negative tracking", hero.letterSpacing.value < 0f)
         assertTrue("Large has negative tracking", large.letterSpacing.value < 0f)
     }
 
     @Test
     fun semanticTextStylesAreDefinedAndNonNull() {
+        assertNotNull(MistyType.LocationTitleWide)
         assertNotNull(MistyType.LocationPrimary)
         assertNotNull(MistyType.LocationSecondary)
         assertNotNull(MistyType.ConditionPrimary)
+        assertNotNull(MistyType.LiteraryPhrase)
         assertNotNull(MistyType.DetailRow)
         assertNotNull(MistyType.ForecastTime)
         assertNotNull(MistyType.ForecastTemp)

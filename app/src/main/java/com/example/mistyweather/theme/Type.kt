@@ -29,13 +29,13 @@ object MistyType {
 
     // ── Numeric Typography (Temperature Scales - Design Hypothesis) ───────────
 
-    /** Primary hero temperature display: "24°" — airy, light, editorial. */
+    /** Primary hero temperature display: "24°" — architectural, balanced, airy. */
     val TemperatureHero = TextStyle(
         fontFamily    = PlusJakartaSansFamily,
         fontWeight    = FontWeight.Light,
-        fontSize      = 84.sp,
-        lineHeight    = 84.sp,
-        letterSpacing = (-3).sp,
+        fontSize      = 68.sp,
+        lineHeight    = 68.sp,
+        letterSpacing = (-2.5).sp,
     )
 
     /** Large secondary temperature or prominent metric. */
@@ -61,6 +61,15 @@ object MistyType {
 
     // ── Content Typography (Location, Weather Condition, Details) ─────────────
 
+    /** Wide-tracked atmospheric location title: "T O K Y O" */
+    val LocationTitleWide = TextStyle(
+        fontFamily    = PlusJakartaSansFamily,
+        fontWeight    = FontWeight.Medium,
+        fontSize      = 18.sp,
+        lineHeight    = 24.sp,
+        letterSpacing = 4.5.sp,
+    )
+
     /** Primary location title: "东京", "Paris" — confident without shouting. */
     val LocationPrimary = TextStyle(
         fontFamily    = PlusJakartaSansFamily,
@@ -77,6 +86,15 @@ object MistyType {
         fontSize      = 13.sp,
         lineHeight    = 18.sp,
         letterSpacing = 0.2.sp,
+    )
+
+    /** Literary weather phrase: "晨光清澈 · 空气微冽" */
+    val LiteraryPhrase = TextStyle(
+        fontFamily    = PlusJakartaSansFamily,
+        fontWeight    = FontWeight.Normal,
+        fontSize      = 13.sp,
+        lineHeight    = 18.sp,
+        letterSpacing = 0.8.sp,
     )
 
     // Legacy alias

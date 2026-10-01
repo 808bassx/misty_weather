@@ -74,6 +74,8 @@ object MistyDimensions {
     val WeatherIconList     = 26.dp  // Icon pack preview cards
     val WeatherIconForecast = 28.dp  // Hourly forecast slots (elevated from 22dp)
     val WeatherIconHero     = 72.dp  // Primary hero weather presence (64-72dp hypothesis)
+    val WeatherOrbSize       = 80.dp  // Phase F: Atmospheric celestial hero orb
+    val WeatherOrbAuraRadius = 48.dp  // Ambient luminous aura radius
 
     // ── Ambient / Glow Effects ────────────────────────────────────────────────
     val SunGlowRadius  = 120.dp    // Radius of sun radial gradient

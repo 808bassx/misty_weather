@@ -8,6 +8,7 @@ import com.example.mistyweather.theme.MistyDimensions
 import com.example.mistyweather.theme.MistyMotion
 import com.example.mistyweather.theme.MistyType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -67,26 +68,78 @@ class HomeHeroTest {
 
     @Test
     fun `hero weather icon dimension adheres to Phase D design scale`() {
-        // Hero icon must be 72dp for atmospheric stage focal presence
+        // Hero icon must be 72dp for legacy compatibility
         assertEquals(72.dp, MistyDimensions.WeatherIconHero)
         // Forecast icon must be 28dp (elevated from legacy 22dp)
         assertEquals(28.dp, MistyDimensions.WeatherIconForecast)
+        // Phase F: Weather Orb celestial size (80dp) and ambient aura (48dp)
+        assertEquals(80.dp, MistyDimensions.WeatherOrbSize)
+        assertEquals(48.dp, MistyDimensions.WeatherOrbAuraRadius)
     }
 
     @Test
     fun `hero typography adheres to Plus Jakarta Sans architectural scales`() {
-        // Hero temperature: 84sp Light with -3sp tracking
-        assertEquals(84.sp, MistyType.TemperatureHero.fontSize)
-        assertEquals((-3).sp, MistyType.TemperatureHero.letterSpacing)
+        // Hero temperature: 68sp Light with -2.5sp tracking (Phase F)
+        assertEquals(68.sp, MistyType.TemperatureHero.fontSize)
+        assertEquals((-2.5).sp, MistyType.TemperatureHero.letterSpacing)
 
         // Location primary: 22sp Medium
         assertEquals(22.sp, MistyType.LocationPrimary.fontSize)
+
+        // Location title wide: 18sp Medium with 4.5sp tracking
+        assertEquals(18.sp, MistyType.LocationTitleWide.fontSize)
+        assertEquals(4.5.sp, MistyType.LocationTitleWide.letterSpacing)
+
+        // Literary phrase: 13sp Regular
+        assertEquals(13.sp, MistyType.LiteraryPhrase.fontSize)
 
         // Condition primary: 17sp Regular
         assertEquals(17.sp, MistyType.ConditionPrimary.fontSize)
 
         // Detail row: 14sp Regular
         assertEquals(14.sp, MistyType.DetailRow.fontSize)
+    }
+
+    @Test
+    fun `formatLocationTitleWide converts latin names to wide uppercase title`() {
+        assertEquals("TOKYO", HomeHeroFormatters.formatLocationTitleWide("Tokyo, Japan", "东京"))
+        assertEquals("BEIJING", HomeHeroFormatters.formatLocationTitleWide("Beijing", "北京"))
+        assertEquals("PARIS", HomeHeroFormatters.formatLocationTitleWide("Paris, France", "巴黎"))
+        assertEquals("上海", HomeHeroFormatters.formatLocationTitleWide("Current_location", "上海"))
+        assertEquals("MISTY", HomeHeroFormatters.formatLocationTitleWide("", ""))
+    }
+
+    @Test
+    fun `formatLiteraryPhrase produces poetic environmental descriptions`() {
+        val sunnyDay = HomeHeroFormatters.formatLiteraryPhrase("晴", WeatherType.Sunny, com.example.mistyweather.weather.atmosphere.TimeOfDay.Noon)
+        assertEquals("明媚日光 · 万物朗阔", sunnyDay)
+
+        val sunnyNight = HomeHeroFormatters.formatLiteraryPhrase("晴", WeatherType.Sunny, com.example.mistyweather.weather.atmosphere.TimeOfDay.Night)
+        assertEquals("星汉静谧 · 夜色澄澈", sunnyNight)
+
+        val rainMorning = HomeHeroFormatters.formatLiteraryPhrase("小雨", WeatherType.Rain, com.example.mistyweather.weather.atmosphere.TimeOfDay.Morning)
+        assertEquals("清晨带露 · 细雨初歇", rainMorning)
+
+        val rainNight = HomeHeroFormatters.formatLiteraryPhrase("小雨", WeatherType.Rain, com.example.mistyweather.weather.atmosphere.TimeOfDay.Night)
+        assertEquals("夜雨淅沥 · 窗凝水汽", rainNight)
+
+        val cloudyDay = HomeHeroFormatters.formatLiteraryPhrase("多云", WeatherType.Cloudy, com.example.mistyweather.weather.atmosphere.TimeOfDay.Noon)
+        assertEquals("层云微遮 · 天光温润", cloudyDay)
+    }
+
+    @Test
+    fun `getAtmosphericTemperatureColor avoids harsh pure white and keys to lighting`() {
+        val sunnyColor = HomeHeroFormatters.getAtmosphericTemperatureColor(WeatherType.Sunny, com.example.mistyweather.weather.atmosphere.TimeOfDay.Noon)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFFFF8DC).copy(alpha = 0.95f), sunnyColor)
+
+        val nightColor = HomeHeroFormatters.getAtmosphericTemperatureColor(WeatherType.Sunny, com.example.mistyweather.weather.atmosphere.TimeOfDay.Night)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFDCE1FF).copy(alpha = 0.90f), nightColor)
+
+        val rainColor = HomeHeroFormatters.getAtmosphericTemperatureColor(WeatherType.Rain, com.example.mistyweather.weather.atmosphere.TimeOfDay.Noon)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFDCF0FF).copy(alpha = 0.92f), rainColor)
+
+        val cloudyColor = HomeHeroFormatters.getAtmosphericTemperatureColor(WeatherType.Cloudy, com.example.mistyweather.weather.atmosphere.TimeOfDay.Noon)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFFE8EEF5).copy(alpha = 0.92f), cloudyColor)
     }
 
     @Test
@@ -119,5 +172,19 @@ class HomeHeroTest {
             assertEquals(type, preview.weatherType)
             assertTrue(preview.temperature in -50..60)
         }
+    }
+
+    @Test
+    fun `isHourlySlotDaytime calculates diurnal phase from hourly labels accurately`() {
+        assertTrue(isHourlySlotDaytime("现在", com.example.mistyweather.weather.atmosphere.TimeOfDay.Noon))
+        assertFalse(isHourlySlotDaytime("现在", com.example.mistyweather.weather.atmosphere.TimeOfDay.Night))
+        assertFalse(isHourlySlotDaytime("现在", com.example.mistyweather.weather.atmosphere.TimeOfDay.Evening))
+
+        assertTrue(isHourlySlotDaytime("09:00", null))
+        assertTrue(isHourlySlotDaytime("12:00", null))
+        assertTrue(isHourlySlotDaytime("17:00", null))
+        assertFalse(isHourlySlotDaytime("21:00", null))
+        assertFalse(isHourlySlotDaytime("23:00", null))
+        assertFalse(isHourlySlotDaytime("02:00", null))
     }
 }

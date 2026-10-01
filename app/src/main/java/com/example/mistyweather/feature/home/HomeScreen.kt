@@ -35,6 +35,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -45,6 +46,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.mistyweather.core.weather.ForecastSlot
 import com.example.mistyweather.core.weather.PreviewForecastSlots
 import com.example.mistyweather.core.weather.PreviewWeatherTokyo
@@ -186,8 +188,14 @@ fun HomeScreen(
         CitySelectionDialog(
             cities          = favoriteCities,
             currentCity     = currentCity,
-            onSelectCity    = { city -> viewModel.selectCity(city) },
-            onUseMyLocation = onUseMyLocation,
+            onSelectCity    = { city ->
+                viewModel.selectCity(city)
+                showCityDialog = false
+            },
+            onUseMyLocation = {
+                onUseMyLocation()
+                showCityDialog = false
+            },
             onDismiss       = { showCityDialog = false },
             onSearch        = { query -> viewModel.searchCities(query) },
             searchResults   = searchResults,
@@ -259,8 +267,11 @@ internal fun HomeScreenContent(
 
                 Spacer(Modifier.height(MistyDimensions.HeroSpacing))
 
-                // Hourly forecast glass card
-                ForecastGlassCard(slots = forecast)
+                // Phase F.2: Borderless Atmospheric Timeline
+                AtmosphericTimeline(
+                    slots           = forecast,
+                    activeTimeOfDay = activeTime,
+                )
             }
 
             // ── Layer 4: Floating Glass Navigation ────────────────────────────────
@@ -298,93 +309,145 @@ private fun AmbientBottomWash() {
     }
 }
 
-// ─── Forecast Glass Card ──────────────────────────────────────────────────────
+// ─── Phase F.2: Atmospheric Timeline (Borderless Floating Celestial Strip) ───
 
 @Composable
-private fun ForecastGlassCard(slots: List<ForecastSlot>) {
-    GlassSurface(
-        level    = GlassLevel.Regular,
-        modifier = Modifier
+internal fun AtmosphericTimeline(
+    slots: List<ForecastSlot>,
+    activeTimeOfDay: TimeOfDay? = null,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight(),
     ) {
-        Column(
-            modifier = Modifier.padding(
-                horizontal = MistyDimensions.Space16,
-                vertical   = MistyDimensions.Space16,
-            ),
+        // Minimalist timeline header floating without container
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = MistyDimensions.Space8, vertical = MistyDimensions.Space4),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            // Section header
             Text(
-                text  = "今天",
-                style = MistyType.SectionHeader,
-                color = MistyColors.TextOnGlassSecondary,
+                text = "今日预报",
+                style = MistyType.ForecastTime,
+                color = MistyColors.TextOnGlassSecondary.copy(alpha = 0.80f),
             )
+            Text(
+                text = "24-HOUR",
+                style = MistyType.CaptionMicro,
+                color = MistyColors.TextOnGlassTertiary,
+                letterSpacing = 1.5.sp,
+            )
+        }
 
-            Spacer(Modifier.height(MistyDimensions.Space12))
+        Spacer(Modifier.height(MistyDimensions.Space8))
 
-            // Divider — 1px glass border line
-            Canvas(modifier = Modifier.fillMaxWidth().height(1.dp)) {
-                drawLine(
-                    color       = MistyColors.GlassBorder,
-                    start       = Offset(0f, 0f),
-                    end         = Offset(size.width, 0f),
-                    strokeWidth = 1.dp.toPx(),
+        // Borderless, transparent horizontal scrolling timeline
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(MistyDimensions.Space8),
+        ) {
+            slots.forEach { slot ->
+                AtmosphericTimelineSlotItem(
+                    slot = slot,
+                    activeTimeOfDay = activeTimeOfDay,
                 )
-            }
-
-            Spacer(Modifier.height(MistyDimensions.Space12))
-
-            // Hourly slots
-            Row(
-                modifier              = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(MistyDimensions.Space8),
-            ) {
-                slots.forEach { slot ->
-                    ForecastSlotItem(slot = slot)
-                }
             }
         }
     }
 }
 
 @Composable
-private fun ForecastSlotItem(slot: ForecastSlot) {
+private fun AtmosphericTimelineSlotItem(
+    slot: ForecastSlot,
+    activeTimeOfDay: TimeOfDay?,
+) {
+    val isCurrentSlot = slot.label.trim() == "现在"
+    val isSlotDay = isHourlySlotDaytime(slot.label, activeTimeOfDay)
+    val ambientColor = LocalGlassAmbient.current
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .width(MistyDimensions.ForecastItemMinWidth)
+            .then(
+                if (isCurrentSlot) {
+                    Modifier.drawBehind {
+                        drawRoundRect(
+                            color = Color.White.copy(alpha = 0.07f),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(14.dp.toPx(), 14.dp.toPx()),
+                        )
+                    }
+                } else Modifier
+            )
+            .padding(vertical = MistyDimensions.Space8, horizontal = MistyDimensions.Space4)
             .semantics {
                 contentDescription = "${slot.label} ${slot.temperature}度 ${slot.weatherType.name}"
             },
     ) {
         // Time label
         Text(
-            text      = slot.label,
-            style     = MistyType.ForecastTime,
-            color     = MistyColors.TextOnGlassSecondary,
+            text = slot.label,
+            style = MistyType.ForecastTime,
+            color = if (isCurrentSlot) MistyColors.TextOnGlass else MistyColors.TextOnGlassSecondary,
             textAlign = TextAlign.Center,
         )
 
         Spacer(Modifier.height(MistyDimensions.Space8))
 
-        // Weather type icon (icon-pack-aware, geometric fallback)
-        WeatherIcon(
-            weatherType = slot.weatherType,
-            modifier    = Modifier.size(MistyDimensions.WeatherIconForecast),
-        )
+        // Weather symbol with subtle ambient halo
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(34.dp)
+                .drawBehind {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                ambientColor.copy(alpha = 0.16f),
+                                Color.Transparent,
+                            ),
+                            radius = size.width * 0.5f,
+                            center = center,
+                        ),
+                    )
+                },
+        ) {
+            WeatherIcon(
+                weatherType = slot.weatherType,
+                isDaytime   = isSlotDay,
+                modifier    = Modifier.size(MistyDimensions.WeatherIconForecast),
+                tint        = Color(0xFFF1F5F9).copy(alpha = 0.92f),
+            )
+        }
 
         Spacer(Modifier.height(MistyDimensions.Space8))
 
         // Temperature
         Text(
-            text      = "${slot.temperature}°",
-            style     = MistyType.ForecastTemp,
-            color     = MistyColors.TextOnGlass,
+            text = "${slot.temperature}°",
+            style = MistyType.ForecastTemp,
+            color = if (isCurrentSlot) MistyColors.TextOnGlass else MistyColors.TextOnGlass.copy(alpha = 0.90f),
             textAlign = TextAlign.Center,
         )
+    }
+}
+
+internal fun isHourlySlotDaytime(label: String, activeTime: TimeOfDay?): Boolean {
+    val trimmed = label.trim()
+    if (trimmed == "现在") {
+        return activeTime?.let { it != TimeOfDay.Night && it != TimeOfDay.Evening } ?: true
+    }
+    val hour = trimmed.substringBefore(":").toIntOrNull()
+    return if (hour != null) {
+        hour in 6..18
+    } else {
+        true
     }
 }
 
