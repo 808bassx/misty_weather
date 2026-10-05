@@ -24,13 +24,7 @@ class FakeWeatherRepository(
 
     private val _weatherFlow = MutableStateFlow(initialState)
 
-    override fun getWeather(cityId: String): Flow<WeatherState> = _weatherFlow.asStateFlow()
-
-    override suspend fun refreshWeather(cityId: String) {
-        // No-op for fake repository
-    }
-
-    override fun getWeatherByCoordinates(
+    override fun getWeather(
         latitude: Double,
         longitude: Double,
         cityName: String,
@@ -52,7 +46,7 @@ class FakeWeatherRepository(
         }
     }
 
-    override suspend fun refreshWeatherByCoordinates(
+    override suspend fun refreshWeather(
         latitude: Double,
         longitude: Double,
         cityName: String,

@@ -227,7 +227,7 @@ class WeatherViewModelTest {
         val initial = viewModel.uiState.value
         assertTrue("Initial state must be Success", initial is WeatherUiState.Success)
 
-        viewModel.refreshWeather("tokyo")
+        viewModel.refreshWeather()
         val afterSync = viewModel.uiState.value
         assertTrue("State after sync must remain Success", afterSync is WeatherUiState.Success)
         assertFalse(viewModel.appState.value.isSyncing)

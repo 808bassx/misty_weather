@@ -86,7 +86,7 @@ class WeatherDomainTest {
     @Test
     fun `FakeWeatherRepository emits canonical Tokyo data`() = runTest {
         val repository = FakeWeatherRepository()
-        val state = repository.getWeather("tokyo").first()
+        val state = repository.getWeather(35.6895, 139.6917, "东京", "Tokyo").first()
 
         assertEquals("东京", state.cityName)
         assertEquals("Tokyo", state.cityNameLatin)
@@ -106,7 +106,7 @@ class WeatherDomainTest {
         )
 
         repository.updateWeather(newState)
-        val updatedState = repository.getWeather("tokyo").first()
+        val updatedState = repository.getWeather(35.6895, 139.6917, "东京", "Tokyo").first()
 
         assertEquals(18, updatedState.temperature)
         assertEquals(WeatherCondition.HeavyRain, updatedState.condition)

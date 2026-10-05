@@ -40,7 +40,7 @@ class DefaultGetCurrentWeatherUseCase(
     override fun invoke(): Flow<WeatherState> = cityRepository.getCurrentCity()
         .distinctUntilChanged()
         .flatMapLatest { city ->
-            weatherRepository.getWeatherByCoordinates(
+            weatherRepository.getWeather(
                 latitude      = city.latitude,
                 longitude     = city.longitude,
                 cityName      = city.name,
@@ -50,7 +50,7 @@ class DefaultGetCurrentWeatherUseCase(
 
     override suspend fun refresh() {
         val city = cityRepository.getCurrentCity().first()
-        weatherRepository.refreshWeatherByCoordinates(
+        weatherRepository.refreshWeather(
             latitude      = city.latitude,
             longitude     = city.longitude,
             cityName      = city.name,
@@ -66,7 +66,7 @@ class GetWeatherForCityUseCase(
     private val weatherRepository: WeatherRepository,
 ) {
     operator fun invoke(city: City): Flow<WeatherState> =
-        weatherRepository.getWeatherByCoordinates(
+        weatherRepository.getWeather(
             latitude      = city.latitude,
             longitude     = city.longitude,
             cityName      = city.name,
@@ -74,7 +74,7 @@ class GetWeatherForCityUseCase(
         )
 
     suspend fun refresh(city: City) {
-        weatherRepository.refreshWeatherByCoordinates(
+        weatherRepository.refreshWeather(
             latitude      = city.latitude,
             longitude     = city.longitude,
             cityName      = city.name,

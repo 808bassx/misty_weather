@@ -6,41 +6,38 @@ import kotlinx.coroutines.flow.Flow
 //
 // Phase 3.6 Domain Layer: Abstract repository boundary for weather data retrieval.
 //
-// Phase 4 will supply RemoteWeatherRepository without affecting downstream UI.
+// Phase 4.5: Coordinates-only contract.
+// A repository resolves weather for geographic coordinates and nothing else.
+// Turning a [com.misty.weather.weather.city.City] into coordinates is the domain
+// layer's job (see GetCurrentWeatherUseCase) — keeping it here previously forced
+// every implementation to carry its own city table and silently fall back to Tokyo.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface WeatherRepository {
-    /**
-     * Continuous reactive stream of [WeatherState] for a given location.
-     */
-    fun getWeather(cityId: String = "tokyo"): Flow<WeatherState>
-
-    /**
-     * Refreshes weather state from the underlying data source.
-     */
-    suspend fun refreshWeather(cityId: String = "tokyo")
 
     /**
      * Continuous reactive stream of [WeatherState] for explicit geographic coordinates.
-     * Introduced in Phase 4.3 for dynamic location and multi-city support.
+     *
+     * @param latitude      Decimal latitude.
+     * @param longitude     Decimal longitude.
+     * @param cityName      Localized display name to label the result with.
+     * @param cityNameLatin Romanized display name.
      */
-    fun getWeatherByCoordinates(
+    fun getWeather(
         latitude: Double,
         longitude: Double,
-        cityName: String = "当前位置",
-        cityNameLatin: String = "Current Location",
-    ): Flow<WeatherState> = getWeather("tokyo")
+        cityName: String,
+        cityNameLatin: String,
+    ): Flow<WeatherState>
 
     /**
      * Refreshes weather state for explicit geographic coordinates.
      */
-    suspend fun refreshWeatherByCoordinates(
+    suspend fun refreshWeather(
         latitude: Double,
         longitude: Double,
-        cityName: String = "当前位置",
-        cityNameLatin: String = "Current Location",
-    ) {
-        refreshWeather("tokyo")
-    }
+        cityName: String,
+        cityNameLatin: String,
+    )
 }

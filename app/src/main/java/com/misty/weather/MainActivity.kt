@@ -19,8 +19,10 @@ class MainActivity : ComponentActivity() {
 
         weatherOverrideState = intent?.getStringExtra("EXTRA_WEATHER")
 
-        // Phase 4.3: Initialize real persistent DataStore cache, City storage & Location provider
-        WeatherModule.initialize(applicationContext, useRemote = true)
+        // Phase 4.3: Initialize real persistent DataStore cache, City storage & Location provider.
+        // This is the single data-source decision point: both Debug and Release use the
+        // remote Open-Meteo pipeline. Offline/fake data is injected via WeatherModule.setCustomContainer.
+        WeatherModule.initialize(applicationContext)
 
         // Edge-to-edge: weather scene bleeds behind status bar and nav bar —
         // the floating glass nav handles its own safe-area insets.

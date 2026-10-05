@@ -1,10 +1,5 @@
-package com.misty.weather.ui.main
+package com.misty.weather.core.weather
 
-import com.misty.weather.core.weather.ForecastSlot
-import com.misty.weather.core.weather.PreviewForecastSlots
-import com.misty.weather.core.weather.PreviewWeatherTokyo
-import com.misty.weather.core.weather.WeatherPreview
-import com.misty.weather.core.weather.WeatherType
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test

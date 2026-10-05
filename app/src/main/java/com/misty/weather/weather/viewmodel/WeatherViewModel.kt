@@ -346,19 +346,16 @@ class WeatherViewModel(
     }
 
     /**
-     * Triggers a refresh while transitioning to [WeatherUiState.Refreshing].
+     * Triggers a refresh of the currently active city while transitioning to
+     * [WeatherUiState.Refreshing]. Always routed through the use case so the city
+     * is resolved in one place.
      */
-    fun refreshWeather(cityId: String = _currentCity.value.id) {
+    fun refreshWeather() {
         viewModelScope.launch {
             _isRefreshing.value = true
             _appState.value = _appState.value.copy(isSyncing = true)
             try {
-                val city = _currentCity.value
-                if (city.id == cityId) {
-                    getCurrentWeatherUseCase.refresh()
-                } else {
-                    repository.refreshWeather(cityId)
-                }
+                getCurrentWeatherUseCase.refresh()
                 _activeError.value = null
                 _appState.value = _appState.value.copy(
                     isSyncing               = false,

@@ -34,12 +34,17 @@ import java.io.IOException
 //   • Cache-first instant cold-boot presentation
 //   • HTTP 500 & network error fallback to cache
 //   • Cold-start error propagation when cache is empty
-//   • City coordinate resolution
+//   • Coordinate pass-through to the API
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RemoteWeatherRepositoryTest {
+
+    private companion object {
+        const val TOKYO_LAT = 35.6895
+        const val TOKYO_LON = 139.6917
+    }
 
     private class TestWeatherApi : WeatherApi {
         var responseToReturn: WeatherResponseDto = WeatherResponseDto(
@@ -76,7 +81,7 @@ class RemoteWeatherRepositoryTest {
         val cache = InMemoryWeatherCache()
         val repository = RemoteWeatherRepository(api = testApi, cache = cache)
 
-        val weather = repository.getWeather("tokyo").first()
+        val weather = repository.getWeather(TOKYO_LAT, TOKYO_LON, "东京", "Tokyo").first()
 
         assertEquals(26, weather.temperature)
         assertEquals(WeatherCondition.ClearSky, weather.condition)
@@ -85,7 +90,7 @@ class RemoteWeatherRepositoryTest {
         // Verify write-through to cache
         val cached = cache.load()
         assertNotNull("Data should be persisted to cache", cached)
-        assertEquals("tokyo", cached?.location)
+        assertEquals("coord_${TOKYO_LAT}_${TOKYO_LON}", cached?.location)
         assertEquals(26, cached?.weatherState?.temperature)
         assertEquals(WeatherType.Sunny, cached?.renderState?.weatherType)
     }
@@ -117,7 +122,7 @@ class RemoteWeatherRepositoryTest {
         val emissions = mutableListOf<WeatherState>()
 
         val job = launch(testDispatcher) {
-            repository.getWeather("tokyo").toList(emissions)
+            repository.getWeather(TOKYO_LAT, TOKYO_LON, "东京", "Tokyo").toList(emissions)
         }
 
         assertTrue("Should have at least 2 emissions", emissions.size >= 2)
@@ -148,7 +153,7 @@ class RemoteWeatherRepositoryTest {
         val emissions = mutableListOf<WeatherState>()
 
         val job = launch(testDispatcher) {
-            repository.getWeather("tokyo").toList(emissions)
+            repository.getWeather(TOKYO_LAT, TOKYO_LON, "东京", "Tokyo").toList(emissions)
         }
 
         // Must emit cached weather without crashing the flow
@@ -169,7 +174,7 @@ class RemoteWeatherRepositoryTest {
         val repository = RemoteWeatherRepository(api = testApi, cache = emptyCache)
 
         try {
-            repository.getWeather("tokyo").first()
+            repository.getWeather(TOKYO_LAT, TOKYO_LON, "东京", "Tokyo").first()
             fail("Expected IOException when cache is empty and network fails")
         } catch (e: IOException) {
             assertEquals("Network connection refused", e.message)
@@ -185,7 +190,7 @@ class RemoteWeatherRepositoryTest {
 
         val emissions = mutableListOf<WeatherState>()
         val job = launch(testDispatcher) {
-            repository.getWeather("tokyo").toList(emissions)
+            repository.getWeather(TOKYO_LAT, TOKYO_LON, "东京", "Tokyo").toList(emissions)
         }
 
         // Initial fetch: 26°C
@@ -198,7 +203,7 @@ class RemoteWeatherRepositoryTest {
                 weatherCode = 1,
             )
         )
-        repository.refreshWeather("tokyo")
+        repository.refreshWeather(TOKYO_LAT, TOKYO_LON, "东京", "Tokyo")
 
         assertEquals(31, emissions.last().temperature)
         assertEquals(31, cache.load()?.weatherState?.temperature)
@@ -207,20 +212,16 @@ class RemoteWeatherRepositoryTest {
     }
 
     @Test
-    fun `fetchAndPersist passes correct coordinates for supported cities`() = runTest {
+    fun `getWeather passes the requested coordinates straight to the API`() = runTest {
         val testApi = TestWeatherApi()
         val cache = InMemoryWeatherCache()
         val repository = RemoteWeatherRepository(api = testApi, cache = cache)
 
-        repository.refreshWeather("tokyo")
-        assertEquals(35.6895, testApi.lastRequestedLatitude!!, 0.001)
-        assertEquals(139.6917, testApi.lastRequestedLongitude!!, 0.001)
-
-        repository.refreshWeather("beijing")
+        repository.refreshWeather(39.9042, 116.4074, "北京", "Beijing")
         assertEquals(39.9042, testApi.lastRequestedLatitude!!, 0.001)
         assertEquals(116.4074, testApi.lastRequestedLongitude!!, 0.001)
 
-        repository.refreshWeather("shanghai")
+        repository.refreshWeather(31.2304, 121.4737, "上海", "Shanghai")
         assertEquals(31.2304, testApi.lastRequestedLatitude!!, 0.001)
         assertEquals(121.4737, testApi.lastRequestedLongitude!!, 0.001)
     }

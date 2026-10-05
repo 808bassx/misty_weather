@@ -134,7 +134,7 @@ class WeatherViewModelCitySwitchTest {
     }
 
     @Test
-    fun `refreshWeather for specific city triggers targeted refresh without error`() = runTest {
+    fun `refreshWeather routes through the use case for the active city`() = runTest {
         val storage = InMemoryCityStorage()
         val cityRepo = DefaultCityRepository(storage)
         val viewModel = WeatherViewModel(
@@ -146,7 +146,7 @@ class WeatherViewModelCitySwitchTest {
 
         backgroundScope.launch(testDispatcher) { viewModel.uiState.collect() }
 
-        viewModel.refreshWeather("tokyo")
+        viewModel.refreshWeather()
         val state = viewModel.uiState.value
         assertTrue("State should remain Success after refresh", state is WeatherUiState.Success)
     }

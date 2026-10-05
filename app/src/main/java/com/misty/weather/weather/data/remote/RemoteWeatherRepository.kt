@@ -24,6 +24,9 @@ import java.util.Calendar
 //   3. Write-through persistence via [WeatherCache].
 //   4. Offline error recovery with graceful cache fallback.
 //
+// Phase 4.5: Requests are scoped to coordinates only. The internal city table is
+// gone — city/coordinate resolution belongs to the domain layer.
+//
 // ─────────────────────────────────────────────────────────────────────────────
 
 class RemoteWeatherRepository(
@@ -34,7 +37,12 @@ class RemoteWeatherRepository(
 
     private val _weatherFlow = MutableStateFlow(initialState)
 
-    override fun getWeather(cityId: String): Flow<WeatherState> = flow {
+    override fun getWeather(
+        latitude: Double,
+        longitude: Double,
+        cityName: String,
+        cityNameLatin: String,
+    ): Flow<WeatherState> = flow {
         // 1. Emit cached weather first if available for instant cold-boot presentation
         val cached = cache.load()
         if (cached != null) {
@@ -44,7 +52,7 @@ class RemoteWeatherRepository(
 
         // 2. Fetch fresh weather from remote
         try {
-            fetchAndPersist(cityId)
+            fetchAndPersist(latitude, longitude, cityName, cityNameLatin)
         } catch (e: Exception) {
             // If there is no cache at all, propagate exception to trigger Error state in UI
             if (cached == null) {
@@ -58,56 +66,19 @@ class RemoteWeatherRepository(
         }
     }.distinctUntilChanged()
 
-    override suspend fun refreshWeather(cityId: String) {
-        fetchAndPersist(cityId)
-    }
-
-    override fun getWeatherByCoordinates(
-        latitude: Double,
-        longitude: Double,
-        cityName: String,
-        cityNameLatin: String,
-    ): Flow<WeatherState> = flow {
-        val cached = cache.load()
-        if (cached != null) {
-            _weatherFlow.value = cached.weatherState
-            emit(cached.weatherState)
-        }
-
-        try {
-            fetchAndPersistCoordinates(latitude, longitude, cityName, cityNameLatin)
-        } catch (e: Exception) {
-            if (cached == null) {
-                throw e
-            }
-        }
-
-        _weatherFlow.collect { state ->
-            emit(state)
-        }
-    }.distinctUntilChanged()
-
-    override suspend fun refreshWeatherByCoordinates(
+    override suspend fun refreshWeather(
         latitude: Double,
         longitude: Double,
         cityName: String,
         cityNameLatin: String,
     ) {
-        fetchAndPersistCoordinates(latitude, longitude, cityName, cityNameLatin)
-    }
-
-    /**
-     * Executes remote network call for a cityId, maps response to domain state, and saves to cache.
-     */
-    suspend fun fetchAndPersist(cityId: String = "tokyo"): WeatherState {
-        val (lat, lon, name, nameLatin) = resolveCoordinates(cityId)
-        return fetchAndPersistCoordinates(lat, lon, name, nameLatin, locationKey = cityId)
+        fetchAndPersist(latitude, longitude, cityName, cityNameLatin)
     }
 
     /**
      * Executes remote network call for explicit coordinates, maps response to domain state, and saves to cache.
      */
-    suspend fun fetchAndPersistCoordinates(
+    suspend fun fetchAndPersist(
         latitude: Double,
         longitude: Double,
         cityName: String,
@@ -127,17 +98,6 @@ class RemoteWeatherRepository(
         return domainState
     }
 
-    private fun resolveCoordinates(cityId: String): CityConfig {
-        return when (cityId.lowercase()) {
-            "tokyo" -> CityConfig(35.6895, 139.6917, "东京", "Tokyo")
-            "kyoto" -> CityConfig(35.0116, 135.7681, "京都", "Kyoto")
-            "osaka" -> CityConfig(34.6937, 135.5023, "大阪", "Osaka")
-            "beijing" -> CityConfig(39.9042, 116.4074, "北京", "Beijing")
-            "shanghai" -> CityConfig(31.2304, 121.4737, "上海", "Shanghai")
-            else -> CityConfig(35.6895, 139.6917, "东京", "Tokyo")
-        }
-    }
-
     private fun resolveDiurnalTime(): Pair<TimeOfDay, Float> {
         val calendar = Calendar.getInstance()
         val hour = calendar.get(Calendar.HOUR_OF_DAY)
@@ -146,11 +106,4 @@ class RemoteWeatherRepository(
         val progress = TimeOfDay.progressWithin(hour, minute)
         return time to progress
     }
-
-    private data class CityConfig(
-        val latitude: Double,
-        val longitude: Double,
-        val name: String,
-        val nameLatin: String,
-    )
 }

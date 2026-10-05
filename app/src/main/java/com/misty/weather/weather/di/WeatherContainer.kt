@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
-import com.misty.weather.BuildConfig
 import com.misty.weather.weather.cache.DataStoreWeatherCache
 import com.misty.weather.weather.cache.InMemoryWeatherCache
 import com.misty.weather.weather.cache.WeatherCache
@@ -51,8 +50,9 @@ interface WeatherContainer {
 
 /**
  * Default container configuration.
- * Provides remote [RemoteWeatherRepository] (backed by Open-Meteo REST API) with offline cache,
- * and allows instant fallback or switching to offline [FakeWeatherRepository].
+ * Provides remote [RemoteWeatherRepository] (backed by Open-Meteo REST API) with offline cache.
+ * Offline [FakeWeatherRepository] is selected explicitly via [createOffline] or
+ * [WeatherModule.setCustomContainer], never implicitly through the build type.
  */
 class DefaultWeatherContainer(
     override val weatherCache: WeatherCache = InMemoryWeatherCache(),
@@ -60,7 +60,7 @@ class DefaultWeatherContainer(
     override val cityRepository: CityRepository = DefaultCityRepository(cityStorage),
     override val locationProvider: LocationProvider = FakeLocationProvider(),
     val api: WeatherApi = WeatherApiClient.api,
-    val useRemote: Boolean = !BuildConfig.DEBUG,
+    val useRemote: Boolean = true,
     override val weatherRepository: WeatherRepository = if (useRemote) {
         RemoteWeatherRepository(api = api, cache = weatherCache)
     } else {
@@ -123,23 +123,16 @@ object WeatherModule {
     /**
      * Initializes the production DI container with Android system services,
      * persistent DataStore preferences for city storage and weather cache,
-     * and hardware [DefaultLocationProvider].
+     * the hardware [DefaultLocationProvider], and the remote Open-Meteo repository.
      */
-    fun initialize(
-        context: Context,
-        useRemote: Boolean = true,
-    ) {
+    fun initialize(context: Context) {
         val appContext = context.applicationContext
         val dataStore = appContext.mistyDataStore
         val cache = DataStoreWeatherCache(dataStore)
         val cityStorage = DataStoreCityStorage(dataStore)
         val cityRepository = DefaultCityRepository(cityStorage)
         val locationProvider = DefaultLocationProvider(appContext)
-        val weatherRepository = if (useRemote) {
-            RemoteWeatherRepository(api = WeatherApiClient.api, cache = cache)
-        } else {
-            FakeWeatherRepository()
-        }
+        val weatherRepository = RemoteWeatherRepository(api = WeatherApiClient.api, cache = cache)
         val useCase = DefaultGetCurrentWeatherUseCase(cityRepository, weatherRepository)
 
         containerInstance = object : WeatherContainer {
